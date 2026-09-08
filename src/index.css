@@ -1,0 +1,52 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Plus Jakarta Sans", ui-sans-serif, system-ui, sans-serif;
+  --font-serif: "Playfair Display", ui-serif, Georgia, Cambria, serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+
+  /* Global Amethyst Purple / Deep Violet override for indigo-classes */
+  --color-indigo-50: #fbf9ff;
+  --color-indigo-100: #f1e9ff;
+  --color-indigo-200: #e2d3ff;
+  --color-indigo-300: #caaeff;
+  --color-indigo-400: #ad83ff;
+  --color-indigo-500: #8b5cf6;
+  --color-indigo-600: #7c3aed;
+  --color-indigo-700: #6d28d9;
+  --color-indigo-800: #5b21b6;
+  --color-indigo-900: #4c1d95;
+  --color-indigo-950: #210a4a;
+
+  /* Global Ocean Teal / Mint override for emerald-classes */
+  --color-emerald-50: #f0fdfa;
+  --color-emerald-100: #ccfbf1;
+  --color-emerald-200: #99f6e4;
+  --color-emerald-300: #5eead4;
+  --color-emerald-400: #2dd4bf;
+  --color-emerald-500: #14b8a6;
+  --color-emerald-600: #0d9488;
+  --color-emerald-700: #0f766e;
+  --color-emerald-800: #115e59;
+  --color-emerald-900: #134e4a;
+  --color-emerald-950: #042f2e;
+}
+
+/* Elegant CSS overrides for scrollbars and modern styling */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #e2e8f0;
+  border-radius: 9999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #cbd5e1;
+}

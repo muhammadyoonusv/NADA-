@@ -1,0 +1,8 @@
+{
+  "name": "Remix Union Transaction Ledger \u0026 Sheet Automator",
+  "description": "An accounting system for class union treasurers. Journalize transactions in physical Google Sheets and instantly generate Ledger accounts, Trial Balance, Receipts \u0026 Payments, and Balance Sheet reports.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

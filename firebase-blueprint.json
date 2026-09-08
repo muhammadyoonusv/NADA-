@@ -1,0 +1,190 @@
+{
+  "entities": {
+    "Account": {
+      "title": "Account Ledger",
+      "description": "An individual General Ledger account title used in the double-entry sheets",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique auto-generated general ledger identifier"
+        },
+        "name": {
+          "type": "string",
+          "description": "Human-readable label name of the ledger"
+        },
+        "type": {
+          "type": "string",
+          "enum": ["Asset", "Liability", "Equity", "Income", "Expense"],
+          "description": "Accounting type category"
+        },
+        "isSystem": {
+          "type": "boolean",
+          "description": "Flag preventing deletion of system default accounts"
+        }
+      },
+      "required": ["id", "name", "type"]
+    },
+    "JournalEntry": {
+      "title": "Journal Transaction Entry",
+      "description": "A single balanced physical double-entry transaction record",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique auto-generated transaction row identifier"
+        },
+        "date": {
+          "type": "string",
+          "format": "date",
+          "description": "Standard calendar ISO representation of entry posting date"
+        },
+        "debitAccount": {
+          "type": "string",
+          "description": "Target Ledger Account ID to debit"
+        },
+        "creditAccount": {
+          "type": "string",
+          "description": "Source Ledger Account ID to credit"
+        },
+        "amount": {
+          "type": "number",
+          "description": "Total transfer quantity represented in INR"
+        },
+        "narration": {
+          "type": "string",
+          "description": "Auditable narration explaining transaction purpose"
+        },
+        "files": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "name": { "type": "string" },
+              "type": { "type": "string" },
+              "size": { "type": "number" },
+              "base64": { "type": "string" }
+            },
+            "required": ["name", "type", "size", "base64"]
+          },
+          "description": "Optional attached receipts or files (base64 encoded)"
+        }
+      },
+      "required": ["id", "date", "debitAccount", "creditAccount", "amount"]
+    },
+    "SheetMetadata": {
+      "title": "Ledger Sheet Details Profile",
+      "description": "General settings profile for titles, captions, and treasurer signatures",
+      "type": "object",
+      "properties": {
+        "sheetName": { "type": "string" },
+        "sheetTagline": { "type": "string" },
+        "treasurerName": { "type": "string" },
+        "treasurerEmail": { "type": "string" },
+        "academicYear": { "type": "string" },
+        "allowedEmails": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Array of 3 authorized editor email addresses"
+        }
+      },
+      "required": ["sheetName", "sheetTagline", "treasurerName", "treasurerEmail", "academicYear", "allowedEmails"]
+    },
+    "Student": {
+      "title": "Student Dues Record",
+      "description": "A ledger record tracking active student union fee contributions and balances",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique registration ID or roll number"
+        },
+        "name": {
+          "type": "string",
+          "description": "Full student name"
+        },
+        "className": {
+          "type": "string",
+          "description": "Class or branch division"
+        },
+        "phone": {
+          "type": "string",
+          "description": "Contact phone number"
+        },
+        "totalDue": {
+          "type": "number",
+          "description": "Total union contribution amount scheduled"
+        },
+        "amountPaid": {
+          "type": "number",
+          "description": "Total paid quantity"
+        },
+        "status": {
+          "type": "string",
+          "enum": ["Paid", "Partial", "Pending"],
+          "description": "Present fee clearance status"
+        },
+        "remarks": {
+          "type": "string",
+          "description": "Optional notes on payment transactions"
+        },
+        "lastPaymentDate": {
+          "type": "string",
+          "description": "ISO date of the last fee submission"
+        }
+      },
+      "required": ["id", "name", "totalDue", "amountPaid", "status"]
+    },
+    "Program": {
+      "title": "Student Union Program Folder",
+      "description": "A program folder (e.g., Ramadan, Fest) tracking guest/student dues for each student of the class",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "defaultAmount": { "type": "number" },
+        "date": { "type": "string" },
+        "remarks": { "type": "string" },
+        "studentDues": {
+          "type": "object",
+          "description": "Map from Student ID to dues item: amountPaid, totalDue, status, remarks"
+        }
+      },
+      "required": ["id", "name", "defaultAmount", "date", "studentDues"]
+    }
+  },
+  "firestore": {
+    "/programs/{programId}": {
+      "schema": { "$ref": "#/entities/Program" },
+      "description": "Individual programs folders tracking specialized student dues"
+    },
+    "/students/{studentId}": {
+      "schema": { "$ref": "#/entities/Student" },
+      "description": "Student dues database synchronized with cloud Firestore"
+    },
+    "/accounts/{accountId}": {
+      "schema": { "$ref": "#/entities/Account" },
+      "description": "General Ledger accounts list synchronized with remote Firestore cluster"
+    },
+    "/entries/{entryId}": {
+      "schema": { "$ref": "#/entities/JournalEntry" },
+      "description": "Physically validated double entry journal items"
+    },
+    "/metadata/{configId}": {
+      "schema": { "$ref": "#/entities/SheetMetadata" },
+      "description": "Metadata settings for the general ledger sheets"
+    },
+    "/file_chunks/{chunkId}": {
+      "schema": {
+        "type": "object",
+        "properties": {
+          "fileId": { "type": "string" },
+          "chunkIndex": { "type": "number" },
+          "content": { "type": "string" }
+        },
+        "required": ["fileId", "chunkIndex", "content"]
+      },
+      "description": "Base64 text content parts split to stay under the 1MB Firestore document limit"
+    }
+  }
+}

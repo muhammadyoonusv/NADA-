@@ -1,0 +1,162 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Helper: Verify standard format of ID parameters
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    // Helper: Determine if client is authenticated and verified as an editor
+    function isAuthorizedEditor() {
+      return request.auth != null 
+        && request.auth.token.email_verified == true
+        && (request.auth.token.email == 'klrmuhsin809@gmail.com' || request.auth.token.email == 'yoonuschr@gmail.com');
+    }
+
+    // Helper: Schema validation for accounts
+    function isValidAccount(data) {
+      return data.keys().hasAll(['id', 'name', 'type']) 
+        && data.keys().size() <= 4
+        && data.id is string && data.id.size() <= 100
+        && data.name is string && data.name.size() > 0 && data.name.size() <= 200
+        && data.type is string && (data.type == 'Asset' || data.type == 'Liability' || data.type == 'Equity' || data.type == 'Income' || data.type == 'Expense')
+        && (data.get('isSystem', false) is bool);
+    }
+
+    // Helper: Schema validation for entries
+    function isValidEntry(data) {
+      return data.keys().hasAll(['id', 'date', 'debitAccount', 'creditAccount', 'amount', 'narration'])
+        && data.keys().size() <= 12
+        && data.id is string && data.id.size() <= 100
+        && data.date is string && data.date.size() <= 50
+        && data.debitAccount is string && data.debitAccount.size() <= 100
+        && data.creditAccount is string && data.creditAccount.size() <= 100
+        && data.amount is number && data.amount >= 0
+        && data.narration is string && data.narration.size() <= 2000
+        && (data.get('files', []) == null || data.get('files', []) is list)
+        && (data.get('isCompound', false) is bool)
+        && (data.get('debits', []) is list)
+        && (data.get('credits', []) is list)
+        && (data.get('debitAccountType', '') is string)
+        && (data.get('creditAccountType', '') is string);
+    }
+
+    // Helper: Schema validation for profile details
+    function isValidMetadata(data) {
+      return data.keys().hasAll(['sheetName', 'sheetTagline', 'treasurerName', 'treasurerEmail', 'academicYear', 'allowedEmails'])
+        && data.keys().size() == 6
+        && data.sheetName is string && data.sheetName.size() <= 200
+        && data.sheetTagline is string && data.sheetTagline.size() <= 500
+        && data.treasurerName is string && data.treasurerName.size() <= 200
+        && data.treasurerEmail is string && data.treasurerEmail.size() <= 200
+        && data.academicYear is string && data.academicYear.size() <= 100
+        && data.allowedEmails is list && data.allowedEmails.size() <= 100;
+    }
+
+    // Helper: Schema validation for AI presets
+    function isValidAiPresets(data) {
+      return data.keys().hasAll(['presets', 'updatedAt'])
+        && data.keys().size() <= 3
+        && data.presets is list && data.presets.size() <= 100
+        && data.updatedAt is string;
+    }
+
+    // Helper: Schema validation for students
+    function isValidStudent(data) {
+      return data.keys().hasAll(['id', 'name', 'totalDue', 'amountPaid', 'status'])
+        && data.keys().size() <= 9
+        && data.id is string && data.id.size() <= 100
+        && data.name is string && data.name.size() > 0 && data.name.size() <= 200
+        && data.totalDue is number && data.totalDue >= 0
+        && data.amountPaid is number && data.amountPaid >= 0
+        && data.status is string && (data.status == 'Paid' || data.status == 'Partial' || data.status == 'Pending')
+        && (data.get('className', '') is string)
+        && (data.get('phone', '') is string)
+        && (data.get('remarks', '') is string)
+        && (data.get('lastPaymentDate', '') is string);
+    }
+
+    // Helper: Schema validation for program folders
+    function isValidProgram(data) {
+      return data.keys().hasAll(['id', 'name', 'defaultAmount', 'date', 'studentDues'])
+        && data.keys().size() <= 8
+        && data.id is string && data.id.size() <= 100
+        && data.name is string && data.name.size() > 0 && data.name.size() <= 200
+        && data.defaultAmount is number && data.defaultAmount >= 0
+        && data.date is string && data.date.size() <= 50
+        && data.studentDues is map
+        && (data.get('remarks', '') is string)
+        && (data.get('createdAt', '') is string)
+        && (data.get('excludedStudentIds', []) is list);
+    }
+
+    // Collection: Students Rules
+    match /students/{studentId} {
+      allow read: if true;
+      allow create: if isAuthorizedEditor() && isValidId(studentId) && isValidStudent(request.resource.data) && request.resource.data.id == studentId;
+      allow update: if isAuthorizedEditor() && isValidId(studentId) && isValidStudent(request.resource.data) && request.resource.data.id == studentId;
+      allow delete: if isAuthorizedEditor() && isValidId(studentId);
+    }
+
+    // Collection: Programs Rules
+    match /programs/{programId} {
+      allow read: if true;
+      allow create: if isAuthorizedEditor() && isValidId(programId) && isValidProgram(request.resource.data) && request.resource.data.id == programId;
+      allow update: if isAuthorizedEditor() && isValidId(programId) && isValidProgram(request.resource.data) && request.resource.data.id == programId;
+      allow delete: if isAuthorizedEditor() && isValidId(programId);
+    }
+
+    // Collection: Accounts Rules
+    match /accounts/{accountId} {
+      allow read: if true;
+      allow create: if isAuthorizedEditor() && isValidId(accountId) && isValidAccount(request.resource.data) && request.resource.data.id == accountId;
+      allow update: if isAuthorizedEditor() && isValidId(accountId) && isValidAccount(request.resource.data) && request.resource.data.id == accountId;
+      allow delete: if isAuthorizedEditor() && isValidId(accountId);
+    }
+
+    // Collection: Journal Entries Rules
+    match /entries/{entryId} {
+      allow read: if true;
+      allow create: if isAuthorizedEditor() && isValidId(entryId) && isValidEntry(request.resource.data) && request.resource.data.id == entryId;
+      allow update: if isAuthorizedEditor() && isValidId(entryId) && isValidEntry(request.resource.data) && request.resource.data.id == entryId;
+      allow delete: if isAuthorizedEditor() && isValidId(entryId);
+    }
+
+    // Collection: File Chunks Schema rules
+    match /file_chunks/{chunkId} {
+      allow read: if true;
+      allow create, update: if isAuthorizedEditor() && isValidId(chunkId);
+      allow delete: if isAuthorizedEditor() && isValidId(chunkId);
+    }
+
+    // Collection: Metadata Config Rules
+    match /metadata/{configId} {
+      allow read: if true;
+      // Allow bootstrap creation if user is klrmuhsin809@gmail.com or yoonuschr@gmail.com
+      allow create: if isValidId(configId) && (
+        (configId == 'config' && isValidMetadata(request.resource.data) 
+          && request.auth != null && request.auth.token.email_verified == true 
+          && (request.auth.token.email == 'klrmuhsin809@gmail.com' || request.auth.token.email == 'yoonuschr@gmail.com'))
+        || (configId == 'ai_presets' && isAuthorizedEditor() && isValidAiPresets(request.resource.data))
+      );
+        
+      // Allow editors to update, but only klrmuhsin809@gmail.com or yoonuschr@gmail.com can alter allowedEmails
+      allow update: if isValidId(configId) && (
+        (configId == 'config' && isAuthorizedEditor() && isValidMetadata(request.resource.data)
+          && (request.auth.token.email == 'klrmuhsin809@gmail.com' || request.auth.token.email == 'yoonuschr@gmail.com' || request.resource.data.allowedEmails == resource.data.allowedEmails))
+        || (configId == 'ai_presets' && isAuthorizedEditor() && isValidAiPresets(request.resource.data))
+      );
+        
+      allow delete: if false;
+    }
+
+    // Collection: System Notifications Rules
+    match /system_notifications/{notifId} {
+      allow read: if true;
+      allow create: if isAuthorizedEditor() && isValidId(notifId)
+        && request.resource.data.keys().hasAll(['message', 'type', 'timestamp', 'user']);
+      allow update, delete: if isAuthorizedEditor();
+    }
+  }
+}
