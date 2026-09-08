@@ -42,16 +42,17 @@ service cloud.firestore {
         && (data.get('creditAccountType', '') is string);
     }
 
-    // Helper: Schema validation for profile details
+    // Helper: Schema validation for profile details (supports both standard 6-field and extended logoIcon)
     function isValidMetadata(data) {
       return data.keys().hasAll(['sheetName', 'sheetTagline', 'treasurerName', 'treasurerEmail', 'academicYear', 'allowedEmails'])
-        && data.keys().size() == 6
+        && data.keys().size() <= 8
         && data.sheetName is string && data.sheetName.size() <= 200
         && data.sheetTagline is string && data.sheetTagline.size() <= 500
         && data.treasurerName is string && data.treasurerName.size() <= 200
         && data.treasurerEmail is string && data.treasurerEmail.size() <= 200
         && data.academicYear is string && data.academicYear.size() <= 100
-        && data.allowedEmails is list && data.allowedEmails.size() <= 100;
+        && data.allowedEmails is list && data.allowedEmails.size() <= 100
+        && (data.get('logoIcon', '') is string && data.get('logoIcon', '').size() <= 500000);
     }
 
     // Helper: Schema validation for AI presets

@@ -82,6 +82,10 @@
         "treasurerName": { "type": "string" },
         "treasurerEmail": { "type": "string" },
         "academicYear": { "type": "string" },
+        "logoIcon": {
+          "type": "string",
+          "description": "App header profile photo or emblem icon identifier"
+        },
         "allowedEmails": {
           "type": "array",
           "items": { "type": "string" },

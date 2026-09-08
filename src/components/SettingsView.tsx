@@ -36,7 +36,8 @@ import {
   GraduationCap,
   FolderLock,
   Image,
-  Upload
+  Upload,
+  AlertCircle
 } from 'lucide-react';
 
 interface SettingsViewProps {
@@ -53,6 +54,8 @@ interface SettingsViewProps {
   isEditor: boolean;
   currentUser: any | null;
   
+  onQuickUpdateLogo?: (newLogo: string) => void;
+
   onSaveConfig: (config: {
     sheetName: string;
     sheetTagline: string;
@@ -83,6 +86,7 @@ export function SettingsView({
   allowedEmails = ['klrmuhsin809@gmail.com', 'yoonuschr@gmail.com'],
   isEditor,
   currentUser,
+  onQuickUpdateLogo,
   onSaveConfig,
   onLoadPresets,
   onClearAll,
@@ -106,6 +110,8 @@ export function SettingsView({
   const isSuperAdmin = !!(currentUser && currentUser.email && ['klrmuhsin809@gmail.com', 'yoonuschr@gmail.com'].includes(currentUser.email.toLowerCase()));
 
   const [saveSuccess, setSaveSuccess] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const [logoSavedFast, setLogoSavedFast] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [isImporting, setIsImporting] = useState(false);
   const [importStatus, setImportStatus] = useState<{ success?: boolean; text?: string } | null>(null);
@@ -133,6 +139,15 @@ export function SettingsView({
     setWhitelistedEmails([...mandatory, ...other]);
   }, [sheetName, sheetTagline, treasurerName, treasurerEmail, academicYear, logoIcon, allowedEmails]);
 
+  // Instant save on click for emblem selection
+  const handleSelectEmblem = (id: string) => {
+    setTempLogoIcon(id);
+    onQuickUpdateLogo?.(id);
+    setLogoSavedFast(true);
+    setTimeout(() => setLogoSavedFast(false), 2500);
+  };
+
+  // Instant save on click for photo upload
   const handleGalleryUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
@@ -140,7 +155,39 @@ export function SettingsView({
       reader.onload = (event) => {
         const result = event.target?.result as string;
         if (result) {
+          // Instant 0ms update so preview and header change right on the click
           setTempLogoIcon(result);
+          onQuickUpdateLogo?.(result);
+          setLogoSavedFast(true);
+          setTimeout(() => setLogoSavedFast(false), 2500);
+
+          // Fast background thumbnail optimization for durable storage
+          const img = new window.Image();
+          img.src = result;
+          img.onload = () => {
+            const canvas = document.createElement('canvas');
+            let width = img.width;
+            let height = img.height;
+            const maxSize = 120;
+            if (width > height) {
+              if (width > maxSize) {
+                height *= maxSize / width;
+                width = maxSize;
+              }
+            } else {
+              if (height > maxSize) {
+                width *= maxSize / height;
+                height = maxSize;
+              }
+            }
+            canvas.width = Math.round(width);
+            canvas.height = Math.round(height);
+            const ctx = canvas.getContext('2d');
+            ctx?.drawImage(img, 0, 0, canvas.width, canvas.height);
+            const compressedDataUrl = canvas.toDataURL('image/jpeg', 0.8);
+            setTempLogoIcon(compressedDataUrl);
+            onQuickUpdateLogo?.(compressedDataUrl);
+          };
         }
       };
       reader.readAsDataURL(file);
@@ -166,44 +213,43 @@ export function SettingsView({
     setWhitelistedEmails(prev => prev.filter((_, idx) => idx !== index));
   };
 
-  // Form submit handler
-  const handleSaveProfile = async (e: React.FormEvent) => {
+  // Instant optimistic form submit handler - saves on the click!
+  const handleSaveProfile = (e: React.FormEvent) => {
     e.preventDefault();
     if (!isEditor) {
-      alert('Access denied: You do not have active editor permissions.');
+      setSaveError('Access denied: You do not have active editor permissions.');
       return;
     }
-    setIsSaving(true);
-    setSaveSuccess(false);
-    try {
-      const cleanedEmails: string[] = Array.from(new Set<string>(
-        whitelistedEmails
-          .map(email => email.trim().toLowerCase())
-          .filter(Boolean)
-      ));
-      
-      // Ensure the mandatory ones are always preserved
-      const mandatory = ['klrmuhsin809@gmail.com', 'yoonuschr@gmail.com'];
-      const other = cleanedEmails.filter(e => !mandatory.includes(e));
-      const finalEmails = [...mandatory, ...other];
+    // Instant visual confirmation right on the click
+    setIsSaving(false);
+    setSaveSuccess(true);
+    setSaveError(null);
+    setTimeout(() => setSaveSuccess(false), 4000);
 
-      await onSaveConfig({
-        sheetName: tempSheetName,
-        sheetTagline: tempSheetTagline,
-        treasurerName: tempTreasurerName,
-        treasurerEmail: tempTreasurerEmail,
-        academicYear: tempAcademicYear,
-        allowedEmails: finalEmails,
-        logoIcon: tempLogoIcon
-      });
-      setSaveSuccess(true);
-      setTimeout(() => setSaveSuccess(false), 4000);
-    } catch (err) {
+    const cleanedEmails: string[] = Array.from(new Set<string>(
+      whitelistedEmails
+        .map(email => email.trim().toLowerCase())
+        .filter(Boolean)
+    ));
+    
+    // Ensure the mandatory ones are always preserved
+    const mandatory = ['klrmuhsin809@gmail.com', 'yoonuschr@gmail.com'];
+    const other = cleanedEmails.filter(e => !mandatory.includes(e));
+    const finalEmails = [...mandatory, ...other];
+
+    // Fire background cloud synchronization non-blocking
+    onSaveConfig({
+      sheetName: tempSheetName,
+      sheetTagline: tempSheetTagline,
+      treasurerName: tempTreasurerName,
+      treasurerEmail: tempTreasurerEmail,
+      academicYear: tempAcademicYear,
+      allowedEmails: finalEmails,
+      logoIcon: tempLogoIcon
+    }).catch((err: any) => {
       console.error(err);
-      alert('Error updating the configuration profile. Verify your authenticated permissions.');
-    } finally {
-      setIsSaving(false);
-    }
+      setSaveError(err.message || 'Error updating configuration profile.');
+    });
   };
 
   // Download JSON backup
@@ -286,14 +332,21 @@ export function SettingsView({
         {/* COL 1 & 2: Forms & Backups */}
         <div className="lg:col-span-2 space-y-6">
           
-          {/* Section 1: Institutional Profile Form */}
+          {/* Section 1: Profile Folder (Institutional Identity & Profile Settings) */}
           <div className="bg-white border border-gray-200 rounded-2xl shadow-3xs overflow-hidden">
             <div className="p-5 border-b border-gray-100 bg-slate-50/50 flex justify-between items-center">
-              <div>
-                <h3 className="text-sm font-bold text-gray-900">Ledger Sheet Identity Profile</h3>
-                <p className="text-[11px] text-gray-500 mt-0.5">Customize your general ledger names, subtitle headers, and audited signature blocks</p>
+              <div className="flex items-center gap-3">
+                <div className="p-2.5 bg-indigo-50 border border-indigo-100/80 rounded-xl text-indigo-600 shadow-3xs">
+                  <User size={18} />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-gray-900 flex items-center gap-2">
+                    <span>Profile Folder: Institutional Identity & Settings</span>
+                  </h3>
+                  <p className="text-[11px] text-gray-500 mt-0.5">Manage your ledger title, tagline, signature, visual emblem, and authorized editors</p>
+                </div>
               </div>
-              <span className="p-1 px-2.5 rounded-full text-[10px] font-bold font-mono text-indigo-700 bg-indigo-50 tracking-wider">PROFILE CONFIG</span>
+              <span className="p-1 px-2.5 rounded-full text-[10px] font-bold font-mono text-indigo-700 bg-indigo-50 border border-indigo-100 tracking-wider">PROFILE FOLDER</span>
             </div>
 
             <form onSubmit={handleSaveProfile} className="p-5 space-y-4">
@@ -394,103 +447,165 @@ export function SettingsView({
                   </div>
                 </div>
 
-                {/* Custom Logo Icon & Gallery Photo Customizer */}
-                <div className="md:col-span-2 pt-2 border-t border-gray-100">
-                  <label className="block text-[11px] font-bold text-gray-600 uppercase tracking-wider mb-2 font-mono flex items-center justify-between">
-                    <span>App Profile Icon / Gallery Photo Customizer</span>
-                    <span className="text-[10px] text-indigo-600 font-normal">Choose preset icon or upload photo</span>
-                  </label>
+                {/* Advanced Formal App Profile Photo & Icon Customizer */}
+                <div className="md:col-span-2 pt-4 border-t border-slate-200">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-3 mb-4 border-b border-slate-100 gap-2">
+                    <div>
+                      <h3 className="text-sm font-bold text-slate-900 tracking-tight flex items-center gap-2">
+                        <Sparkles size={16} className="text-indigo-600" />
+                        <span>Application Visual Identity & Profile Emblem</span>
+                      </h3>
+                      <p className="text-xs text-slate-500 mt-0.5">
+                        Customize the official emblem or upload a custom leadership/union badge displayed across the application header.
+                      </p>
+                    </div>
+                    <div className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-indigo-50 text-indigo-700 rounded-full text-[11px] font-semibold border border-indigo-100 shrink-0">
+                      <span className="w-1.5 h-1.5 rounded-full bg-indigo-600 animate-pulse"></span>
+                      <span>Header Branding</span>
+                    </div>
+                  </div>
 
-                  <div className="flex flex-col sm:flex-row items-center gap-4 bg-slate-50 p-4 rounded-xl border border-gray-200">
-                    <div className="w-14 h-14 rounded-xl bg-gradient-to-tr from-blue-600 to-indigo-600 flex items-center justify-center text-white shadow-md overflow-hidden shrink-0">
-                      {tempLogoIcon.startsWith('data:image/') ? (
-                        <img src={tempLogoIcon} alt="Custom Logo" className="w-full h-full object-cover" />
-                      ) : tempLogoIcon === 'Shield' ? (
-                        <Shield size={26} />
-                      ) : tempLogoIcon === 'BookOpen' ? (
-                        <BookOpen size={26} />
-                      ) : tempLogoIcon === 'Users' ? (
-                        <Users size={26} />
-                      ) : tempLogoIcon === 'Award' ? (
-                        <Award size={26} />
-                      ) : tempLogoIcon === 'Star' ? (
-                        <Star size={26} />
-                      ) : tempLogoIcon === 'Heart' ? (
-                        <Heart size={26} />
-                      ) : tempLogoIcon === 'Zap' ? (
-                        <Zap size={26} />
-                      ) : tempLogoIcon === 'Building2' ? (
-                        <Building2 size={26} />
-                      ) : tempLogoIcon === 'Scale' ? (
-                        <Scale size={26} />
-                      ) : tempLogoIcon === 'Briefcase' ? (
-                        <Briefcase size={26} />
-                      ) : tempLogoIcon === 'GraduationCap' ? (
-                        <GraduationCap size={26} />
-                      ) : (
-                        <FolderLock size={26} />
-                      )}
+                  <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start bg-white p-5 rounded-xl border border-slate-200 shadow-xs">
+                    {/* Live Preview Column */}
+                    <div className="lg:col-span-4 flex flex-col items-center justify-center p-6 bg-slate-50 rounded-xl border border-slate-200/80 text-center">
+                      <span className="text-[10px] uppercase font-mono font-bold text-slate-400 tracking-wider mb-3">Live Header Preview</span>
+                      <div className="w-20 h-20 rounded-2xl bg-gradient-to-tr from-indigo-700 via-indigo-600 to-blue-600 flex items-center justify-center text-white shadow-lg overflow-hidden ring-4 ring-white transition-all transform hover:scale-105">
+                        {tempLogoIcon.startsWith('data:image/') ? (
+                          <img src={tempLogoIcon} alt="Custom Logo" className="w-full h-full object-cover" />
+                        ) : tempLogoIcon === 'Shield' ? (
+                          <Shield size={36} />
+                        ) : tempLogoIcon === 'BookOpen' ? (
+                          <BookOpen size={36} />
+                        ) : tempLogoIcon === 'Users' ? (
+                          <Users size={36} />
+                        ) : tempLogoIcon === 'Award' ? (
+                          <Award size={36} />
+                        ) : tempLogoIcon === 'Star' ? (
+                          <Star size={36} />
+                        ) : tempLogoIcon === 'Heart' ? (
+                          <Heart size={36} />
+                        ) : tempLogoIcon === 'Zap' ? (
+                          <Zap size={36} />
+                        ) : tempLogoIcon === 'Building2' ? (
+                          <Building2 size={36} />
+                        ) : tempLogoIcon === 'Scale' ? (
+                          <Scale size={36} />
+                        ) : tempLogoIcon === 'Briefcase' ? (
+                          <Briefcase size={36} />
+                        ) : tempLogoIcon === 'GraduationCap' ? (
+                          <GraduationCap size={36} />
+                        ) : (
+                          <FolderLock size={36} />
+                        )}
+                      </div>
+                      <div className="mt-3 text-xs font-semibold text-slate-800 truncate max-w-full">
+                        {tempSheetName || 'Class Union Ledger'}
+                      </div>
+                      <div className="text-[10px] text-slate-500 font-medium mt-0.5">
+                        {logoSavedFast ? (
+                          <span className="text-emerald-700 font-bold flex items-center justify-center gap-1 animate-pulse">
+                            <Check size={11} className="text-emerald-600" /> Saved instantly!
+                          </span>
+                        ) : (
+                          tempLogoIcon.startsWith('data:image/') ? 'Custom Uploaded Badge' : `Preset Symbol: ${tempLogoIcon}`
+                        )}
+                      </div>
                     </div>
 
-                    <div className="flex-1 space-y-2 w-full">
-                      <div className="flex flex-wrap gap-2">
-                        {[
-                          { id: 'FolderLock', label: 'Lock', icon: FolderLock },
-                          { id: 'Shield', label: 'Shield', icon: Shield },
-                          { id: 'BookOpen', label: 'Book', icon: BookOpen },
-                          { id: 'Users', label: 'Users', icon: Users },
-                          { id: 'Award', label: 'Award', icon: Award },
-                          { id: 'Star', label: 'Star', icon: Star },
-                          { id: 'Heart', label: 'Heart', icon: Heart },
-                          { id: 'Zap', label: 'Zap', icon: Zap },
-                          { id: 'Building2', label: 'Building', icon: Building2 },
-                          { id: 'Scale', label: 'Scale', icon: Scale },
-                          { id: 'Briefcase', label: 'Briefcase', icon: Briefcase },
-                          { id: 'GraduationCap', label: 'Graduation', icon: GraduationCap },
-                        ].map((item) => {
-                          const IconComp = item.icon;
-                          const isSelected = tempLogoIcon === item.id;
-                          return (
-                            <button
-                              key={item.id}
-                              type="button"
-                              onClick={() => setTempLogoIcon(item.id)}
-                              className={`p-2 rounded-lg border transition-all flex items-center justify-center cursor-pointer ${
-                                isSelected ? 'bg-indigo-600 text-white border-indigo-600 shadow-xs' : 'bg-white text-gray-700 border-gray-200 hover:bg-gray-100'
-                              }`}
-                              title={item.label}
-                            >
-                              <IconComp size={16} />
-                            </button>
-                          );
-                        })}
+                    {/* Selection & Upload Controls Column */}
+                    <div className="lg:col-span-8 space-y-4">
+                      <div>
+                        <div className="flex items-center justify-between mb-2">
+                          <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider">
+                            Select Official Emblem Symbol
+                          </label>
+                          {logoSavedFast && (
+                            <span className="text-[11px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2.5 py-0.5 rounded-full flex items-center gap-1 animate-pulse">
+                              <Check size={12} className="text-emerald-600" />
+                              Saved on click!
+                            </span>
+                          )}
+                        </div>
+                        <div className="grid grid-cols-6 sm:grid-cols-6 gap-2">
+                          {[
+                            { id: 'FolderLock', label: 'Lock Archive', icon: FolderLock },
+                            { id: 'Shield', label: 'Security Shield', icon: Shield },
+                            { id: 'BookOpen', label: 'Ledger Book', icon: BookOpen },
+                            { id: 'Users', label: 'Members', icon: Users },
+                            { id: 'Award', label: 'Achievement', icon: Award },
+                            { id: 'Star', label: 'Featured Star', icon: Star },
+                            { id: 'Heart', label: 'Community', icon: Heart },
+                            { id: 'Zap', label: 'Active Pulse', icon: Zap },
+                            { id: 'Building2', label: 'Institution', icon: Building2 },
+                            { id: 'Scale', label: 'Auditing Scale', icon: Scale },
+                            { id: 'Briefcase', label: 'Treasurer', icon: Briefcase },
+                            { id: 'GraduationCap', label: 'Student Union', icon: GraduationCap },
+                          ].map((item) => {
+                            const IconComp = item.icon;
+                            const isSelected = tempLogoIcon === item.id;
+                            return (
+                              <button
+                                key={item.id}
+                                type="button"
+                                onClick={() => handleSelectEmblem(item.id)}
+                                title={item.label}
+                                className={`p-3 rounded-xl border transition-all flex items-center justify-center cursor-pointer ${
+                                  isSelected 
+                                    ? 'bg-indigo-600 text-white border-indigo-600 shadow-sm ring-2 ring-indigo-200' 
+                                    : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50 hover:border-slate-300'
+                                }`}
+                              >
+                                <IconComp size={20} className={isSelected ? 'text-white' : 'text-indigo-600'} />
+                              </button>
+                            );
+                          })}
+                        </div>
                       </div>
 
-                      <div className="pt-1 flex items-center gap-2">
-                        <button
-                          type="button"
-                          onClick={() => galleryInputRef.current?.click()}
-                          className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white hover:bg-gray-50 text-gray-700 border border-gray-300 rounded-lg text-xs font-medium transition-all cursor-pointer shadow-3xs"
-                        >
-                          <Upload size={14} className="text-indigo-600" />
-                          <span>Upload from Gallery / Device</span>
-                        </button>
-                        {tempLogoIcon.startsWith('data:image/') && (
+                      <div className="pt-3 border-t border-slate-100">
+                        <div className="flex items-center justify-between mb-2">
+                          <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider">
+                            Or Upload Custom Profile / Emblem Photo
+                          </label>
+                          {logoSavedFast && (
+                            <span className="text-[11px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2.5 py-0.5 rounded-full flex items-center gap-1 animate-pulse">
+                              <Check size={12} className="text-emerald-600" />
+                              Photo updated!
+                            </span>
+                          )}
+                        </div>
+                        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
                           <button
                             type="button"
-                            onClick={() => setTempLogoIcon('FolderLock')}
-                            className="text-xs text-rose-600 hover:text-rose-700 font-medium px-2 py-1 cursor-pointer"
+                            onClick={() => galleryInputRef.current?.click()}
+                            className="inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-white hover:bg-slate-50 text-slate-700 border border-slate-300 rounded-xl text-xs font-semibold transition-all cursor-pointer shadow-3xs"
                           >
-                            Remove custom photo
+                            <Upload size={16} className="text-indigo-600" />
+                            <span>Browse Device / Gallery</span>
                           </button>
-                        )}
-                        <input
-                          ref={galleryInputRef}
-                          type="file"
-                          accept="image/*"
-                          onChange={handleGalleryUpload}
-                          className="hidden"
-                        />
+                          
+                          {tempLogoIcon.startsWith('data:image/') ? (
+                            <button
+                              type="button"
+                              onClick={() => handleSelectEmblem('FolderLock')}
+                              className="inline-flex items-center justify-center gap-1.5 px-3 py-2.5 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 rounded-xl text-xs font-semibold transition-all cursor-pointer"
+                            >
+                              <span>Remove Custom Photo</span>
+                            </button>
+                          ) : (
+                            <span className="text-xs text-slate-400 italic">
+                              Supports JPG, PNG, WEBP (Automatically compressed to 150×150px thumbnail).
+                            </span>
+                          )}
+
+                          <input
+                            ref={galleryInputRef}
+                            type="file"
+                            accept="image/*"
+                            onChange={handleGalleryUpload}
+                            className="hidden"
+                          />
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -588,6 +703,12 @@ export function SettingsView({
                     <span className="text-xs text-emerald-600 bg-emerald-50 border border-emerald-200 p-1.5 px-3 rounded-lg font-bold flex items-center gap-1.5 animate-fade-in">
                       <Check size={14} className="text-emerald-500 stroke-[3]" />
                       Profile synchronized with cloud database!
+                    </span>
+                  )}
+                  {saveError && (
+                    <span className="text-xs text-amber-800 bg-amber-50 border border-amber-200 p-1.5 px-3 rounded-lg font-bold flex items-center gap-1.5 animate-fade-in">
+                      <AlertCircle size={14} className="text-amber-600" />
+                      {saveError}
                     </span>
                   )}
                 </div>

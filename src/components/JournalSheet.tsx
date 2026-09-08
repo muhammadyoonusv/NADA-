@@ -31,6 +31,7 @@ interface JournalSheetProps {
   aiPresets?: { label: string; desc: string; debit: string; credit: string; narration: string }[];
   onGenerateAiPresets?: () => Promise<void>;
   loadingAiPresets?: boolean;
+  quickTemplateToApply?: { template: { debit: string; credit: string; narration: string }; timestamp: number } | null;
 }
 
 const compressImage = (file: File): Promise<{ base64: string; size: number }> => {
@@ -111,6 +112,7 @@ export function JournalSheet({
   aiPresets = [],
   onGenerateAiPresets,
   loadingAiPresets = false,
+  quickTemplateToApply,
 }: JournalSheetProps) {
   // Navigation / Filter states
   const [searchTerm, setSearchTerm] = useState('');
@@ -138,6 +140,13 @@ export function JournalSheet({
   const [isCompoundMode, setIsCompoundMode] = useState(false);
   const [compDebits, setCompDebits] = useState<{ accountId: string; amount: string; type?: AccountType }[]>([{ accountId: '', amount: '' }]);
   const [compCredits, setCompCredits] = useState<{ accountId: string; amount: string; type?: AccountType }[]>([{ accountId: '', amount: '' }]);
+
+  // Add listener for quick templates from props
+  React.useEffect(() => {
+    if (quickTemplateToApply?.template) {
+      handleQuickTemplate(quickTemplateToApply.template);
+    }
+  }, [quickTemplateToApply]);
 
   // Sorting
   const [sortKey, setSortKey] = useState<'date' | 'amount'>('date');
@@ -544,149 +553,6 @@ export function JournalSheet({
           </div>
         </div>
       )}
-
-      {/* Quick Access Union Templates */}
-      <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-100 rounded-xl p-4">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
-          <div className="flex items-center gap-2">
-            <Sparkles className="text-indigo-600 animate-pulse" size={18} />
-            <h3 className="font-semibold text-indigo-950 text-sm">Treasurer Quick Templates (Daily Helper)</h3>
-          </div>
-          
-          <div className="flex items-center bg-indigo-100/60 p-0.5 rounded-lg text-xs self-start sm:self-auto">
-            <button
-              type="button"
-              onClick={() => setActivePresetTab('standard')}
-              className={`px-3 py-1 rounded-md font-medium transition-all cursor-pointer ${
-                activePresetTab === 'standard'
-                  ? 'bg-white text-indigo-950 shadow-xs'
-                  : 'text-indigo-700 hover:text-indigo-950'
-              }`}
-            >
-              💡 Standard Presets
-            </button>
-            <button
-              type="button"
-              onClick={() => setActivePresetTab('ai')}
-              className={`px-3 py-1 rounded-md font-medium transition-all flex items-center gap-1 cursor-pointer ${
-                activePresetTab === 'ai'
-                  ? 'bg-white text-indigo-950 shadow-xs'
-                  : 'text-indigo-700 hover:text-indigo-950'
-              }`}
-            >
-              ✨ AI Recognized
-              {aiPresets.length > 0 && (
-                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-ping inline-block" />
-              )}
-            </button>
-          </div>
-        </div>
-
-        {activePresetTab === 'standard' ? (
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 animate-fade-in">
-            {presets.map((p, idx) => (
-              <button
-                key={idx}
-                type="button"
-                disabled={!isEditor}
-                onClick={() => handleQuickTemplate(p)}
-                className={`bg-white border rounded-lg text-left p-3 transition-all text-xs group ${
-                  isEditor 
-                    ? 'border-indigo-100 hover:border-indigo-300 hover:shadow-xs cursor-pointer' 
-                    : 'border-slate-200 opacity-60 cursor-not-allowed'
-                }`}
-              >
-                <div className={`font-semibold flex items-center justify-between ${
-                  isEditor ? 'text-indigo-900 group-hover:text-indigo-700' : 'text-slate-500'
-                }`}>
-                  <span>{p.label}</span>
-                  <span className="text-[10px] text-gray-400 font-mono tracking-tighter">
-                    {isEditor ? 'Add +' : 'Locked'}
-                  </span>
-                </div>
-                <p className="text-gray-500 mt-1 line-clamp-1">{p.desc}</p>
-              </button>
-            ))}
-          </div>
-        ) : (
-          <div className="animate-fade-in">
-            {aiPresets.length === 0 ? (
-              <div className="bg-white border border-indigo-100/80 rounded-xl p-5 text-center flex flex-col items-center justify-center space-y-3">
-                <div className="p-3 bg-indigo-50 border border-indigo-100 text-indigo-600 rounded-full">
-                  <Sparkles size={24} className="animate-pulse" />
-                </div>
-                <div className="max-w-md">
-                  <h4 className="text-sm font-bold text-indigo-950">No AI Templates Configured Yet</h4>
-                  <p className="text-xs text-slate-500 mt-1 leading-relaxed">
-                    Let Gemini analyze your actual registered ledger entries to automatically recognize patterns, determine mostly used transaction categories, and synthesize custom helper templates!
-                  </p>
-                </div>
-                <button
-                  type="button"
-                  disabled={loadingAiPresets || !isEditor}
-                  onClick={onGenerateAiPresets}
-                  className={`flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-300 text-white rounded-lg text-xs font-semibold shadow-xs cursor-pointer transition-colors ${
-                    !isEditor ? 'opacity-50 cursor-not-allowed' : ''
-                  }`}
-                  title={!isEditor ? "Only admins can request AI Ledger sync" : "Analyze ledger records with Gemini"}
-                >
-                  <RefreshCcw size={14} className={loadingAiPresets ? 'animate-spin' : ''} />
-                  {loadingAiPresets ? 'Analyzing Ledger with Gemini...' : 'Analyze Ledger & Synthesize Shortcuts'}
-                </button>
-              </div>
-            ) : (
-              <div className="space-y-3">
-                <div className="flex items-center justify-between text-[11px] text-slate-500 border-b border-indigo-100/40 pb-2">
-                  <span>Below are AI-optimized workflows recognized from patterns inside your union's general ledger.</span>
-                  {isEditor && (
-                    <button
-                      type="button"
-                      disabled={loadingAiPresets}
-                      onClick={onGenerateAiPresets}
-                      className="text-indigo-600 hover:text-indigo-800 font-semibold flex items-center gap-1 cursor-pointer disabled:opacity-50"
-                    >
-                      <RefreshCcw size={11} className={loadingAiPresets ? 'animate-spin' : ''} />
-                      {loadingAiPresets ? 'Re-analyzing...' : 'Refresh AI Ledger Analysis'}
-                    </button>
-                  )}
-                </div>
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
-                  {aiPresets.map((p, idx) => (
-                    <button
-                      key={idx}
-                      type="button"
-                      disabled={!isEditor}
-                      onClick={() => handleQuickTemplate(p)}
-                      className={`bg-indigo-50/20 border-2 rounded-lg text-left p-3 transition-all text-xs group ${
-                        isEditor 
-                          ? 'border-indigo-200/60 hover:border-indigo-400 hover:bg-white hover:shadow-xs cursor-pointer' 
-                          : 'border-slate-200 opacity-60 cursor-not-allowed'
-                      }`}
-                    >
-                      <div className={`font-semibold flex items-center justify-between ${
-                        isEditor ? 'text-indigo-950 group-hover:text-indigo-700' : 'text-slate-500'
-                      }`}>
-                        <span className="flex items-center gap-1">
-                          ✨ {p.label}
-                        </span>
-                        <span className="text-[9px] bg-indigo-100 text-indigo-700 px-1 py-0.5 rounded-sm font-semibold tracking-tighter uppercase">
-                          AI
-                        </span>
-                      </div>
-                      <p className="text-gray-500 mt-1 line-clamp-1">{p.desc}</p>
-                      <div className="mt-2 pt-1.5 border-t border-slate-100 text-[10px] text-indigo-600 font-mono flex gap-1 justify-between">
-                        <span>Deb: {accounts.find(a => a.id === p.debit)?.name || `#${p.debit}`}</span>
-                        <span>Crd: {accounts.find(a => a.id === p.credit)?.name || `#${p.credit}`}</span>
-                      </div>
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )}
-          </div>
-        )}
-      </div>
 
       {/* Sheet Sheet Grid UI */}
       <div className="bg-white border border-gray-200 rounded-xl shadow-xs overflow-hidden">

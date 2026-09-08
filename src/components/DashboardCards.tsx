@@ -100,8 +100,10 @@ export function DashboardCards({ accounts, entries, onDuesClick, activeTab }: Da
     } as any);
   }
 
+  const isCompact = activeTab !== 'home' && activeTab !== undefined;
+  
   return (
-    <div className={`grid grid-cols-2 sm:grid-cols-2 ${onDuesClick ? 'lg:grid-cols-3 xl:grid-cols-6' : 'lg:grid-cols-5'} gap-2 sm:gap-4 mb-4 sm:mb-6`}>
+    <div className={`grid grid-cols-2 sm:grid-cols-2 ${onDuesClick ? 'lg:grid-cols-3 xl:grid-cols-6' : 'lg:grid-cols-5'} gap-2 sm:gap-4 ${isCompact ? 'mb-3' : 'mb-4 sm:mb-6'}`}>
       {cards.map((card, idx) => {
         const Icon = card.icon;
         const isClickable = 'onClick' in card;
@@ -112,15 +114,15 @@ export function DashboardCards({ accounts, entries, onDuesClick, activeTab }: Da
               key={idx}
               id={`dashboard-card-${idx}`}
               onClick={(card as any).onClick}
-              className={`p-4 rounded-xl border ${card.color} transition-all ${idx === 5 ? 'hidden md:flex' : 'flex'} items-center justify-between text-left cursor-pointer hover:scale-[1.02] active:scale-[0.98]`}
+              className={`${isCompact ? 'p-3' : 'p-4'} rounded-xl border ${card.color} transition-all ${idx === 5 ? 'hidden md:flex' : 'flex'} items-center justify-between text-left cursor-pointer hover:scale-[1.02] active:scale-[0.98]`}
               type="button"
             >
               <div>
-                <p className={`text-xs ${idx === 5 ? 'font-bold' : 'font-semibold'} uppercase tracking-wider opacity-75`}>{card.title}</p>
-                {card.value && <h3 className="text-xl font-bold font-mono mt-1">{card.value}</h3>}
+                <p className={`${isCompact ? 'text-[10px]' : 'text-xs'} ${idx === 5 ? 'font-bold' : 'font-semibold'} uppercase tracking-wider opacity-75`}>{card.title}</p>
+                {card.value && <h3 className={`${isCompact ? 'text-lg' : 'text-xl'} font-bold font-mono mt-1`}>{card.value}</h3>}
               </div>
-              <div className={`p-2.5 rounded-lg bg-white/80 shadow-xs ${card.iconColor}`}>
-                <Icon size={20} />
+              <div className={`${isCompact ? 'p-2' : 'p-2.5'} rounded-lg bg-white/80 shadow-xs ${card.iconColor}`}>
+                <Icon size={isCompact ? 16 : 20} />
               </div>
             </button>
           );
@@ -130,14 +132,14 @@ export function DashboardCards({ accounts, entries, onDuesClick, activeTab }: Da
           <div
             key={idx}
             id={`dashboard-card-${idx}`}
-            className={`p-4 rounded-xl border ${card.color} transition-all hover:shadow-sm flex items-center justify-between`}
+            className={`${isCompact ? 'p-3' : 'p-4'} rounded-xl border ${card.color} transition-all hover:shadow-sm flex items-center justify-between`}
           >
             <div>
-              <p className="text-xs font-semibold uppercase tracking-wider opacity-75">{card.title}</p>
-              {card.value && <h3 className="text-xl font-bold font-mono mt-1">{card.value}</h3>}
+              <p className={`${isCompact ? 'text-[10px]' : 'text-xs'} font-semibold uppercase tracking-wider opacity-75`}>{card.title}</p>
+              {card.value && <h3 className={`${isCompact ? 'text-lg' : 'text-xl'} font-bold font-mono mt-1`}>{card.value}</h3>}
             </div>
-            <div className={`p-2.5 rounded-lg bg-white/80 shadow-xs ${card.iconColor}`}>
-              <Icon size={20} />
+            <div className={`${isCompact ? 'p-2' : 'p-2.5'} rounded-lg bg-white/80 shadow-xs ${card.iconColor}`}>
+              <Icon size={isCompact ? 16 : 20} />
             </div>
           </div>
         );

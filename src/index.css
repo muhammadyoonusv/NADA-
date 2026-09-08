@@ -1,9 +1,9 @@
 @import "tailwindcss";
 
 @theme {
-  --font-sans: "Plus Jakarta Sans", ui-sans-serif, system-ui, sans-serif;
-  --font-serif: "Playfair Display", ui-serif, Georgia, Cambria, serif;
-  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  --font-sans: "NumbersCapitols", "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --font-serif: "NumbersCapitols", "Cinzel", "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --font-mono: "NumbersCapitols", "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, monospace;
 
   /* Global Amethyst Purple / Deep Violet override for indigo-classes */
   --color-indigo-50: #fbf9ff;
@@ -50,3 +50,19 @@
 ::-webkit-scrollbar-thumb:hover {
   background: #cbd5e1;
 }
+
+/* Capital lining figures font specifically for numeric digits 0-9 */
+@font-face {
+  font-family: 'NumbersCapitols';
+  src: local('Cinzel'), local('Inter');
+  unicode-range: U+0030-0039, U+002C, U+002E, U+20B9, U+0024, U+0025, U+002B, U+2212;
+}
+
+html, body, input, button, select, textarea {
+  font-family: 'NumbersCapitols', 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  font-variant-numeric: lining-nums tabular-nums;
+  -moz-font-feature-settings: "lnum" 1, "tnum" 1;
+  -webkit-font-feature-settings: "lnum" 1, "tnum" 1;
+  font-feature-settings: "lnum" 1, "tnum" 1;
+}
+

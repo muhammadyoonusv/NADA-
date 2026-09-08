@@ -16,7 +16,9 @@ import { ChartOfAccounts } from './components/ChartOfAccounts';
 import { IncomeExpenditureView } from './components/IncomeExpenditureView';
 import { SettingsView } from './components/SettingsView';
 import { StudentDuesView } from './components/StudentDuesView';
+import { HomePage } from './components/HomePage';
 import { NotificationCenter, AppNotification } from './components/NotificationCenter';
+import { SidebarProfileFolder } from './components/SidebarProfileFolder';
 import { Users as UsersIcon } from 'lucide-react';
 import {
   collection,
@@ -42,6 +44,7 @@ import {
   User
 } from 'firebase/auth';
 import {
+  Home, Menu,
   FileText,
   BookOpen,
   LayoutDashboard,
@@ -72,7 +75,11 @@ import {
   GraduationCap,
   Users,
   Image,
-  Upload
+  Upload,
+  MoreVertical,
+  LogOut,
+  ChevronDown,
+  ChevronRight
 } from 'lucide-react';
 
 const DEFAULT_STUDENTS: Student[] = [];
@@ -165,17 +172,61 @@ export default function App() {
     }
   }, [toast]);
 
-  const [activeTab, setActiveTab] = useState<'journal' | 'ledgers' | 'trial' | 'receipts' | 'expenditure' | 'balance' | 'chart' | 'dues' | 'settings'>('journal');
+  const [activeTab, setActiveTab] = useState<'home' | 'journal' | 'ledgers' | 'trial' | 'receipts' | 'expenditure' | 'balance' | 'chart' | 'dues' | 'settings'>('home');
+  const [isAppSidebarOpen, setIsAppSidebarOpen] = useState(false);
+  const [isSidebarProfileFolderOpen, setIsSidebarProfileFolderOpen] = useState(true);
+  const [isSidebarTemplatesOpen, setIsSidebarTemplatesOpen] = useState(false);
   const [isReportsMobileMenuOpen, setIsReportsMobileMenuOpen] = useState(false);
   const [isHelpOpen, setIsHelpOpen] = useState(false);
+  const [isTopMenuOpen, setIsTopMenuOpen] = useState(false);
+
+  const [activePresetTab, setActivePresetTab] = useState<'standard' | 'ai'>('standard');
+  const [quickTemplateToApply, setQuickTemplateToApply] = useState<{template: any, timestamp: number} | null>(null);
+
+  const standardPresets = [
+    {
+      label: 'Collect Union Dues',
+      desc: 'Collect annual dues from student via cash/bank',
+      debit: '2', // Bank
+      credit: '4', // Membership Fees
+      narration: 'Collected union membership contribution dues.',
+    },
+    {
+      label: 'Buy Printing Stationery',
+      desc: 'Paid cash for papers or meeting notes printed',
+      debit: '8', // Printing
+      credit: '1', // Cash
+      narration: 'Paid cash for printing union meeting notes and materials.',
+    },
+    {
+      label: 'Buy Refreshments',
+      desc: 'Paid cash for group food and soft drinks',
+      debit: '7', // Food & Refreshments
+      credit: '1', // Cash
+      narration: 'Bought snacks and juices for class union meeting.',
+    },
+    {
+      label: 'Sponsor / Grant Cash',
+      desc: 'Received corporate tour sponsorship',
+      debit: '2', // Bank
+      credit: '5', // Sponsor Fees
+      narration: 'Sponsorship donation received from community merchant.',
+    },
+  ];
+
+  const handleApplyTemplate = (template: any) => {
+    setQuickTemplateToApply({ template, timestamp: Date.now() });
+    setActiveTab('journal');
+    setIsAppSidebarOpen(false);
+  };
 
   // Profile and sheet details state
-  const [sheetName, setSheetName] = useState('Class Union Ledger');
-  const [sheetTagline, setSheetTagline] = useState('Double-entry accounting, instant trials, cash summaries & Balance sheets');
-  const [treasurerName, setTreasurerName] = useState('Union Treasurer');
-  const [treasurerEmail, setTreasurerEmail] = useState('');
-  const [academicYear, setAcademicYear] = useState('2026 - 2027');
-  const [logoIcon, setLogoIcon] = useState<string>('FolderLock');
+  const [sheetName, setSheetName] = useState(() => localStorage.getItem('app_sheet_name') || 'Class Union Ledger');
+  const [sheetTagline, setSheetTagline] = useState(() => localStorage.getItem('app_sheet_tagline') || 'Double-entry accounting, instant trials, cash summaries & Balance sheets');
+  const [treasurerName, setTreasurerName] = useState(() => localStorage.getItem('app_treasurer_name') || 'Union Treasurer');
+  const [treasurerEmail, setTreasurerEmail] = useState(() => localStorage.getItem('app_treasurer_email') || '');
+  const [academicYear, setAcademicYear] = useState(() => localStorage.getItem('app_academic_year') || '2026 - 2027');
+  const [logoIcon, setLogoIcon] = useState<string>(() => localStorage.getItem('app_logo_icon') || 'FolderLock');
 
   // Connection/Loading states
   const [loadingAccounts, setLoadingAccounts] = useState(true);
@@ -194,6 +245,17 @@ export default function App() {
       setAuthLoading(false);
     });
     return unsub;
+  }, []);
+
+  // Fallback safety timeout in case Firestore network request fails/times out
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setLoadingAccounts(false);
+      setLoadingEntries(false);
+      setLoadingStudents(false);
+      setLoadingMetadata(false);
+    }, 2500);
+    return () => clearTimeout(timer);
   }, []);
 
   // Firestore Real-Time Synchronizers
@@ -227,6 +289,7 @@ export default function App() {
       }
     }, (error) => {
       handleFirestoreError(error, OperationType.GET, 'accounts');
+      setLoadingAccounts(false);
     });
     return unsub;
   }, [isEditor]);
@@ -249,6 +312,7 @@ export default function App() {
       }
     }, (error) => {
       handleFirestoreError(error, OperationType.GET, 'entries');
+      setLoadingEntries(false);
     });
     return unsub;
   }, [loadingAccounts]);
@@ -260,43 +324,56 @@ export default function App() {
         if (isEditor) {
           try {
             await setDoc(doc(db, 'metadata', 'config'), {
-              sheetName: 'Class Union Ledger',
-              sheetTagline: 'Double-entry accounting, instant trials, cash summaries & Balance sheets',
-              treasurerName: 'Union Treasurer',
-              treasurerEmail: '',
-              academicYear: '2026 - 2027',
-              logoIcon: 'FolderLock',
+              sheetName: sheetName || 'Class Union Ledger',
+              sheetTagline: sheetTagline || 'Double-entry accounting, instant trials, cash summaries & Balance sheets',
+              treasurerName: treasurerName || 'Union Treasurer',
+              treasurerEmail: treasurerEmail || '',
+              academicYear: academicYear || '2026 - 2027',
               allowedEmails: ['klrmuhsin809@gmail.com', 'yoonuschr@gmail.com']
             });
           } catch (err) {
             handleFirestoreError(err, OperationType.WRITE, 'metadata/config');
           }
-        } else {
-          setSheetName('Class Union Ledger');
-          setSheetTagline('Double-entry accounting, instant trials, cash summaries & Balance sheets');
-          setTreasurerName('Union Treasurer');
-          setTreasurerEmail('');
-          setAcademicYear('2026 - 2027');
-          setLogoIcon('FolderLock');
-          setAllowedEmails(['klrmuhsin809@gmail.com', 'yoonuschr@gmail.com']);
-          setLoadingMetadata(false);
         }
+        setLoadingMetadata(false);
       } else {
         const data = docSnap.data();
-        setSheetName(data.sheetName || 'Class Union Ledger');
-        setSheetTagline(data.sheetTagline || 'Double-entry accounting, instant trials, cash summaries & Balance sheets');
-        setTreasurerName(data.treasurerName || 'Union Treasurer');
-        setTreasurerEmail(data.treasurerEmail || '');
-        setAcademicYear(data.academicYear || '2026 - 2027');
-        setLogoIcon(data.logoIcon || 'FolderLock');
-        setAllowedEmails([
-          'klrmuhsin809@gmail.com',
-          'yoonuschr@gmail.com'
-        ]);
+        if (data.sheetName) {
+          setSheetName(data.sheetName);
+          localStorage.setItem('app_sheet_name', data.sheetName);
+        }
+        if (data.sheetTagline !== undefined) {
+          setSheetTagline(data.sheetTagline);
+          localStorage.setItem('app_sheet_tagline', data.sheetTagline);
+        }
+        if (data.treasurerName) {
+          setTreasurerName(data.treasurerName);
+          localStorage.setItem('app_treasurer_name', data.treasurerName);
+        }
+        if (data.treasurerEmail !== undefined) {
+          setTreasurerEmail(data.treasurerEmail);
+          localStorage.setItem('app_treasurer_email', data.treasurerEmail);
+        }
+        if (data.academicYear) {
+          setAcademicYear(data.academicYear);
+          localStorage.setItem('app_academic_year', data.academicYear);
+        }
+        if (data.logoIcon) {
+          setLogoIcon(data.logoIcon);
+          localStorage.setItem('app_logo_icon', data.logoIcon);
+        } else {
+          // Keep local cached logo/photo if cloud schema is 6-field without logoIcon
+          const localLogo = localStorage.getItem('app_logo_icon');
+          if (localLogo) setLogoIcon(localLogo);
+        }
+        if (Array.isArray(data.allowedEmails) && data.allowedEmails.length > 0) {
+          setAllowedEmails(data.allowedEmails);
+        }
         setLoadingMetadata(false);
       }
     }, (error) => {
       handleFirestoreError(error, OperationType.GET, 'metadata/config');
+      setLoadingMetadata(false);
     });
     return unsub;
   }, [isEditor]);
@@ -1085,24 +1162,106 @@ export default function App() {
   }) => {
     if (!isEditor) {
       showToast('Access denied: Only authorized editors can update settings.', 'err');
-      return;
+      throw new Error('Access denied: Only authorized editors can update settings.');
     }
+    // Optimistic local state update for instant UI feedback
+    setSheetName(config.sheetName);
+    setSheetTagline(config.sheetTagline);
+    setTreasurerName(config.treasurerName);
+    setTreasurerEmail(config.treasurerEmail);
+    setAcademicYear(config.academicYear);
+    setLogoIcon(config.logoIcon);
+
+    // Save locally immediately so custom photo/emblem and settings are never lost across reloads
     try {
-      await setDoc(doc(db, 'metadata', 'config'), {
-        sheetName: config.sheetName,
-        sheetTagline: config.sheetTagline,
-        treasurerName: config.treasurerName,
-        treasurerEmail: config.treasurerEmail,
-        academicYear: config.academicYear,
-        logoIcon: config.logoIcon,
-        allowedEmails: [
-          'klrmuhsin809@gmail.com',
-          'yoonuschr@gmail.com'
-        ]
-      });
-      showToast('Settings and profile configurations were saved successfully.', 'success');
-    } catch (error) {
-      handleFirestoreError(error, OperationType.WRITE, 'metadata/config');
+      localStorage.setItem('app_sheet_name', config.sheetName);
+      localStorage.setItem('app_sheet_tagline', config.sheetTagline);
+      localStorage.setItem('app_treasurer_name', config.treasurerName);
+      localStorage.setItem('app_treasurer_email', config.treasurerEmail);
+      localStorage.setItem('app_academic_year', config.academicYear);
+      if (config.logoIcon) {
+        localStorage.setItem('app_logo_icon', config.logoIcon);
+      }
+    } catch (e) {
+      console.warn('Local storage cache error:', e);
+    }
+
+    const finalAllowedEmails = config.allowedEmails && config.allowedEmails.length > 0
+      ? config.allowedEmails
+      : ['klrmuhsin809@gmail.com', 'yoonuschr@gmail.com'];
+
+    // Standard 6-field payload (strictly compliant with original deployed Firestore rules requiring exactly 6 keys)
+    const standard6Payload = {
+      sheetName: (config.sheetName || 'Class Union Ledger').trim().slice(0, 200),
+      sheetTagline: (config.sheetTagline || '').trim().slice(0, 500),
+      treasurerName: (config.treasurerName || 'Union Treasurer').trim().slice(0, 200),
+      treasurerEmail: (config.treasurerEmail || '').trim().slice(0, 200),
+      academicYear: (config.academicYear || '2026 - 2027').trim().slice(0, 100),
+      allowedEmails: finalAllowedEmails.slice(0, 100)
+    };
+
+    // Extended 7-field payload (including custom logo / emblem)
+    const extended7Payload = {
+      ...standard6Payload,
+      logoIcon: config.logoIcon || 'FolderLock'
+    };
+
+    // Fire non-blocking asynchronous cloud save
+    (async () => {
+      try {
+        await setDoc(doc(db, 'metadata', 'config'), extended7Payload);
+      } catch (firstErr: any) {
+        console.warn('Extended 7-field save failed. Retrying standard 6-field write...', firstErr);
+        try {
+          await setDoc(doc(db, 'metadata', 'config'), standard6Payload);
+        } catch (secondErr: any) {
+          console.error('Cloud write restriction:', secondErr);
+        }
+      }
+    })();
+  };
+
+  // Instant save on click for Logo/Photo Emblem
+  const handleQuickUpdateLogo = (newLogo: string) => {
+    // 0ms instant UI update
+    setLogoIcon(newLogo);
+    try {
+      localStorage.setItem('app_logo_icon', newLogo);
+    } catch (e) {
+      console.warn('Local storage error:', e);
+    }
+
+    // Non-blocking fire-and-forget background cloud sync
+    if (isEditor) {
+      const finalAllowedEmails = allowedEmails && allowedEmails.length > 0
+        ? allowedEmails
+        : ['klrmuhsin809@gmail.com', 'yoonuschr@gmail.com'];
+
+      const standard6Payload = {
+        sheetName: (sheetName || 'Class Union Ledger').trim().slice(0, 200),
+        sheetTagline: (sheetTagline || '').trim().slice(0, 500),
+        treasurerName: (treasurerName || 'Union Treasurer').trim().slice(0, 200),
+        treasurerEmail: (treasurerEmail || '').trim().slice(0, 200),
+        academicYear: (academicYear || '2026 - 2027').trim().slice(0, 100),
+        allowedEmails: finalAllowedEmails.slice(0, 100)
+      };
+
+      const extended7Payload = {
+        ...standard6Payload,
+        logoIcon: newLogo || 'FolderLock'
+      };
+
+      (async () => {
+        try {
+          await setDoc(doc(db, 'metadata', 'config'), extended7Payload);
+        } catch {
+          try {
+            await setDoc(doc(db, 'metadata', 'config'), standard6Payload);
+          } catch (err) {
+            console.warn('Background logo sync failed:', err);
+          }
+        }
+      })();
     }
   };
 
@@ -1178,6 +1337,13 @@ export default function App() {
       <header className="bg-white border-b border-gray-200 sticky top-0 z-40">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
           <div className="flex items-center gap-3 mr-2">
+            <button
+              onClick={() => setIsAppSidebarOpen(true)}
+              className="p-2 -ml-2 text-gray-500 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors cursor-pointer"
+              title="Quick Templates Menu"
+            >
+              <Menu size={24} />
+            </button>
             <div 
               className="w-10 h-10 rounded-xl bg-gradient-to-tr from-blue-600 to-indigo-600 flex items-center justify-center text-white shadow-md cursor-pointer hover:opacity-90 shrink-0 overflow-hidden" 
               onClick={() => setActiveTab('settings')} 
@@ -1230,65 +1396,6 @@ export default function App() {
           </div>
 
           <div className="flex items-center gap-1.5 sm:gap-3 shrink-0">
-            {/* Google Authentication Control Badge */}
-            {currentUser ? (
-              <div className="flex items-center gap-1.5 sm:gap-2 bg-slate-50 border border-gray-200 rounded-lg select-none px-2 py-1 text-xs">
-                {currentUser.photoURL ? (
-                  <img 
-                    src={currentUser.photoURL} 
-                    alt={currentUser.displayName || ''} 
-                    className="w-5 h-5 sm:w-6 sm:h-6 rounded-full border border-gray-300" 
-                    referrerPolicy="no-referrer" 
-                  />
-                ) : (
-                  <div className="w-5 h-5 sm:w-6 sm:h-6 rounded-full bg-indigo-100 text-indigo-700 font-bold text-[10px] sm:text-xs flex items-center justify-center">
-                    {(currentUser.displayName || currentUser.email || 'U').charAt(0).toUpperCase()}
-                  </div>
-                )}
-                <div className="hidden md:block text-left leading-none max-w-[120px]">
-                  <p className="text-[10px] font-bold text-gray-800 truncate">{currentUser.displayName || 'Google Account'}</p>
-                  <p className="text-[9px] text-gray-400 font-mono truncate">{currentUser.email}</p>
-                </div>
-                
-                {/* Access Level Status indicator */}
-                <span className={`text-[8px] sm:text-[9px] font-mono font-bold px-1.5 py-0.5 rounded ${
-                  isEditor 
-                    ? 'bg-emerald-50 border border-emerald-200 text-emerald-700 font-extrabold flex items-center gap-1' 
-                    : 'bg-amber-50 border border-amber-200 text-amber-700 font-extrabold flex items-center gap-1'
-                }`}>
-                  <span className={`w-1 h-1 sm:w-1.5 sm:h-1.5 rounded-full ${isEditor ? 'bg-emerald-500 animate-pulse' : 'bg-amber-400'}`} />
-                  {isEditor ? 'ADMIN' : 'READONLY'}
-                </span>
-
-                <button
-                  onClick={handleSignOut}
-                  className="uppercase tracking-wider text-rose-600 hover:text-rose-800 font-extrabold border-l border-gray-200 pl-1.5 sm:pl-2 transition-colors cursor-pointer text-[9px] sm:text-[10px]"
-                  title="Sign Out Google Account"
-                >
-                  Logout
-                </button>
-              </div>
-            ) : (
-              <button
-                onClick={handleSignIn}
-                className="inline-flex items-center gap-1.5 px-2.5 py-1.5 bg-white hover:bg-slate-50 border border-indigo-200 hover:border-indigo-300 text-indigo-600 text-[11px] sm:text-xs rounded-lg font-bold transition-all shadow-3xs cursor-pointer hover:scale-[1.01]"
-                title="Authenticate to Gain Authorizations"
-              >
-                <div className="w-4 h-4 rounded-full bg-indigo-50 flex items-center justify-center">
-                  <UserIcon size={11} className="text-indigo-600" />
-                </div>
-                <span>Sign In</span>
-              </button>
-            )}
-
-            <button
-              onClick={() => setIsHelpOpen(!isHelpOpen)}
-              className="inline-flex items-center gap-1 bg-gray-50 border border-gray-200 hover:bg-gray-100 text-gray-700 text-[11px] sm:text-xs rounded-lg font-semibold transition-all shadow-3xs cursor-pointer px-2.5 py-1.5"
-            >
-              <HelpCircle size={13} className="text-gray-400 animate-pulse shrink-0" />
-              <span className="hidden sm:inline">Guide</span>
-            </button>
-
             {currentUser?.email && ['klrmuhsin809@gmail.com', 'yoonuschr@gmail.com'].includes(currentUser.email.toLowerCase()) && (
               <NotificationCenter 
                 notifications={notifications}
@@ -1334,18 +1441,144 @@ export default function App() {
               />
             )}
 
-            {/* Application Settings (moved to the absolute top of the app) */}
-            <button
-              onClick={() => setActiveTab(activeTab === 'settings' ? 'journal' : 'settings')}
-              title={activeTab === 'settings' ? "Close Settings" : "App Settings & Profile"}
-              className={`inline-flex items-center justify-center p-2 rounded-lg border transition-all shadow-3xs cursor-pointer ${
-                activeTab === 'settings'
-                  ? 'bg-slate-900 border-slate-900 text-white scale-[0.98]'
-                  : 'bg-gray-50 border-gray-200 hover:bg-gray-100 text-gray-600 hover:text-gray-900'
-              }`}
-            >
-              <Settings size={14} className={activeTab === 'settings' ? 'text-white' : 'text-slate-500'} />
-            </button>
+            {/* Google Authentication Control Badge (Quick status view) */}
+            {currentUser ? (
+              <div className="flex items-center gap-1.5 sm:gap-2 bg-slate-50 border border-gray-200 rounded-lg select-none px-2 py-1 text-xs">
+                {currentUser.photoURL ? (
+                  <img 
+                    src={currentUser.photoURL} 
+                    alt={currentUser.displayName || ''} 
+                    className="w-5 h-5 sm:w-6 sm:h-6 rounded-full border border-gray-300" 
+                    referrerPolicy="no-referrer" 
+                  />
+                ) : (
+                  <div className="w-5 h-5 sm:w-6 sm:h-6 rounded-full bg-indigo-100 text-indigo-700 font-bold text-[10px] sm:text-xs flex items-center justify-center">
+                    {(currentUser.displayName || currentUser.email || 'U').charAt(0).toUpperCase()}
+                  </div>
+                )}
+                <div className="hidden md:block text-left leading-none max-w-[120px]">
+                  <p className="text-[10px] font-bold text-gray-800 truncate">{currentUser.displayName || 'Google Account'}</p>
+                  <p className="text-[9px] text-gray-400 font-mono truncate">{currentUser.email}</p>
+                </div>
+                
+                {/* Access Level Status indicator */}
+                <span className={`text-[8px] sm:text-[9px] font-mono font-bold px-1.5 py-0.5 rounded ${
+                  isEditor 
+                    ? 'bg-emerald-50 border border-emerald-200 text-emerald-700 font-extrabold flex items-center gap-1' 
+                    : 'bg-amber-50 border border-amber-200 text-amber-700 font-extrabold flex items-center gap-1'
+                }`}>
+                  <span className={`w-1 h-1 sm:w-1.5 sm:h-1.5 rounded-full ${isEditor ? 'bg-emerald-500 animate-pulse' : 'bg-amber-400'}`} />
+                  {isEditor ? 'ADMIN' : 'READONLY'}
+                </span>
+              </div>
+            ) : (
+              <button
+                onClick={handleSignIn}
+                className="inline-flex items-center gap-1.5 px-2.5 py-1.5 bg-white hover:bg-slate-50 border border-indigo-200 hover:border-indigo-300 text-indigo-600 text-[11px] sm:text-xs rounded-lg font-bold transition-all shadow-3xs cursor-pointer hover:scale-[1.01]"
+                title="Authenticate to Gain Authorizations"
+              >
+                <div className="w-4 h-4 rounded-full bg-indigo-50 flex items-center justify-center">
+                  <UserIcon size={11} className="text-indigo-600" />
+                </div>
+                <span>Sign In</span>
+              </button>
+            )}
+
+            {/* Three-Dot Options Dropdown (Settings, Logout, and Guide) */}
+            <div className="relative">
+              <button
+                id="top-three-dot-menu-button"
+                onClick={() => setIsTopMenuOpen(!isTopMenuOpen)}
+                title="More Options"
+                aria-label="Options menu"
+                aria-expanded={isTopMenuOpen}
+                className={`inline-flex items-center justify-center p-2 rounded-lg border transition-all shadow-3xs cursor-pointer ${
+                  isTopMenuOpen || activeTab === 'settings'
+                    ? 'bg-slate-900 border-slate-900 text-white scale-[0.98]'
+                    : 'bg-gray-50 border-gray-200 hover:bg-gray-100 text-gray-700 hover:text-gray-900'
+                }`}
+              >
+                <MoreVertical size={16} />
+              </button>
+
+              {isTopMenuOpen && (
+                <>
+                  {/* Backdrop dismiss overlay */}
+                  <div
+                    className="fixed inset-0 z-40 bg-transparent"
+                    onClick={() => setIsTopMenuOpen(false)}
+                  />
+                  
+                  {/* Dropdown Menu */}
+                  <div className="absolute right-0 mt-2 w-40 sm:w-44 bg-white rounded-xl shadow-xl border border-gray-150 py-1.5 z-50 animate-in fade-in zoom-in-95 duration-150 text-left">
+                    {/* User info snippet if logged in */}
+                    {currentUser && (
+                      <div className="px-3 py-1.5 border-b border-gray-100 mb-1">
+                        <p className="text-[11px] font-bold text-gray-800 truncate">
+                          {currentUser.displayName || 'Google User'}
+                        </p>
+                        <p className="text-[10px] text-gray-400 font-mono truncate">
+                          {currentUser.email}
+                        </p>
+                      </div>
+                    )}
+
+                    {/* 1. Settings option */}
+                    <button
+                      id="menu-option-settings"
+                      onClick={() => {
+                        setActiveTab(activeTab === 'settings' ? 'journal' : 'settings');
+                        setIsTopMenuOpen(false);
+                      }}
+                      className="w-full px-3 py-2 text-left text-xs font-semibold text-gray-700 hover:bg-slate-50 hover:text-slate-900 flex items-center gap-2.5 transition-colors cursor-pointer whitespace-nowrap"
+                    >
+                      <Settings size={15} className="text-slate-500 shrink-0" />
+                      <span>Settings</span>
+                    </button>
+
+                    {/* 2. Guide option */}
+                    <button
+                      id="menu-option-guide"
+                      onClick={() => {
+                        setIsHelpOpen(!isHelpOpen);
+                        setIsTopMenuOpen(false);
+                      }}
+                      className="w-full px-3 py-2 text-left text-xs font-semibold text-gray-700 hover:bg-slate-50 hover:text-slate-900 flex items-center gap-2.5 transition-colors cursor-pointer whitespace-nowrap"
+                    >
+                      <HelpCircle size={15} className="text-blue-500 shrink-0" />
+                      <span>Guide</span>
+                    </button>
+
+                    {/* 3. Logout / Sign in option */}
+                    {currentUser ? (
+                      <button
+                        id="menu-option-logout"
+                        onClick={() => {
+                          setIsTopMenuOpen(false);
+                          handleSignOut();
+                        }}
+                        className="w-full px-3 py-2 text-left text-xs font-semibold text-rose-600 hover:bg-rose-50 hover:text-rose-700 flex items-center gap-2.5 transition-colors cursor-pointer border-t border-gray-100 mt-1 whitespace-nowrap"
+                      >
+                        <LogOut size={15} className="text-rose-500 shrink-0" />
+                        <span>Logout</span>
+                      </button>
+                    ) : (
+                      <button
+                        id="menu-option-login"
+                        onClick={() => {
+                          setIsTopMenuOpen(false);
+                          handleSignIn();
+                        }}
+                        className="w-full px-3 py-2 text-left text-xs font-semibold text-indigo-600 hover:bg-indigo-50 hover:text-indigo-700 flex items-center gap-2.5 transition-colors cursor-pointer border-t border-gray-100 mt-1 whitespace-nowrap"
+                      >
+                        <UserIcon size={15} className="text-indigo-500 shrink-0" />
+                        <span>Sign In</span>
+                      </button>
+                    )}
+                  </div>
+                </>
+              )}
+            </div>
           </div>
         </div>
       </header>
@@ -1515,8 +1748,8 @@ export default function App() {
           </div>
         )}
 
-        {/* Dashboard Cards summary section */}
-        {accounts.length > 0 && (
+        {/* Dashboard Cards summary section (shown on tabs other than Home to avoid duplicate cards) */}
+        {accounts.length > 0 && activeTab !== 'home' && (
           <DashboardCards 
             accounts={accounts} 
             entries={entries} 
@@ -1528,6 +1761,7 @@ export default function App() {
         {/* Tabs navigation list (Desktop View Only) */}
         <div className="hidden md:flex bg-white border border-gray-200 rounded-xl p-1.5 overflow-x-auto gap-1 shadow-3xs sticky top-16 sm:top-20 z-30 whitespace-nowrap [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden scroll-smooth">
           {[
+            { id: 'home', label: 'Home', icon: Home, Menu, color: 'text-indigo-600' },
             { id: 'journal', label: 'Journal Spreadsheet', icon: FileText, color: 'text-indigo-600' },
             { id: 'ledgers', label: 'General Ledger', icon: BookOpen, color: 'text-blue-600' },
             { id: 'trial', label: 'Trial Balance', icon: Wallet, color: 'text-orange-500' },
@@ -1540,8 +1774,8 @@ export default function App() {
             return (
               <button
                 key={tab.id}
-                onClick={() => setActiveTab(isActive ? 'journal' : (tab.id as any))}
-                title={isActive ? `Go to Journal Spreadsheet` : `Select ${tab.label}`}
+                onClick={() => setActiveTab(tab.id as any)}
+                title={`Select ${tab.label}`}
                 className={`flex-none inline-flex items-center gap-2 px-4 py-2.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
                   isActive
                     ? 'bg-slate-900 text-white shadow-xs scale-[0.98]'
@@ -1557,6 +1791,15 @@ export default function App() {
 
         {/* Dynamic Tab Pane Render */}
         <div className="transition-all duration-300">
+          {activeTab === 'home' && (
+            <HomePage
+              accounts={accounts}
+              entries={entries}
+              onNavigateToJournal={() => setActiveTab('journal')}
+              onNavigateToDues={() => setActiveTab('dues')}
+            />
+          )}
+
           {activeTab === 'journal' && (
             <JournalSheet
               accounts={accounts}
@@ -1579,6 +1822,7 @@ export default function App() {
               aiPresets={aiPresets}
               onGenerateAiPresets={handleGenerateAiPresets}
               loadingAiPresets={loadingAiPresets}
+              quickTemplateToApply={quickTemplateToApply}
             />
           )}
 
@@ -1655,6 +1899,7 @@ export default function App() {
               isEditor={isEditor}
               currentUser={currentUser}
               onSaveConfig={handleSaveConfig}
+              onQuickUpdateLogo={handleQuickUpdateLogo}
               onLoadPresets={onLoadPresets}
               onClearAll={onClearAll}
               onImportBackup={onImportBackup}
@@ -1746,6 +1991,19 @@ export default function App() {
       <div className="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-slate-200 z-50 py-1.5 px-2 flex justify-around items-center shadow-[0_-4px_16px_rgba(0,0,0,0.06)] backdrop-blur-md">
         <button
           onClick={() => {
+            setActiveTab('home');
+            setIsReportsMobileMenuOpen(false);
+          }}
+          className={`flex-1 flex flex-col items-center justify-center py-1 rounded-xl transition-all cursor-pointer ${
+            activeTab === 'home' ? 'text-indigo-600 font-extrabold scale-95' : 'text-slate-400'
+          }`}
+        >
+          <Home size={20} className={activeTab === 'home' ? 'text-indigo-600 animate-pulse' : 'text-slate-400'} />
+          <span className="text-[10px] mt-1 font-sans">Home</span>
+        </button>
+
+        <button
+          onClick={() => {
             setActiveTab('journal');
             setIsReportsMobileMenuOpen(false);
           }}
@@ -1793,19 +2051,6 @@ export default function App() {
         >
           <TrendingUp size={20} className={['trial', 'receipts', 'expenditure', 'balance', 'chart'].includes(activeTab) ? 'text-indigo-600' : 'text-slate-400'} />
           <span className="text-[10px] mt-1 font-sans">Statements</span>
-        </button>
-
-        <button
-          onClick={() => {
-            setActiveTab('settings');
-            setIsReportsMobileMenuOpen(false);
-          }}
-          className={`flex-1 flex flex-col items-center justify-center py-1 rounded-xl transition-all cursor-pointer ${
-            activeTab === 'settings' ? 'text-indigo-600 font-extrabold scale-95' : 'text-slate-400'
-          }`}
-        >
-          <Settings size={20} className={activeTab === 'settings' ? 'text-indigo-600 animate-pulse' : 'text-slate-400'} />
-          <span className="text-[10px] mt-1 font-sans">Settings</span>
         </button>
       </div>
 
@@ -1863,6 +2108,233 @@ export default function App() {
                   </button>
                 );
               })}
+            </div>
+          </div>
+        </div>
+      )}
+      
+      {/* Sidebar Overlay */}
+      {isAppSidebarOpen && (
+        <div className="fixed inset-0 z-50 flex">
+          <div 
+            className="fixed inset-0 bg-black/30 backdrop-blur-sm transition-opacity" 
+            onClick={() => setIsAppSidebarOpen(false)}
+          ></div>
+          <div className="relative w-84 sm:w-96 max-w-[92vw] bg-white h-full shadow-2xl flex flex-col animate-slide-in-left">
+            <div className="p-4 border-b border-gray-100 flex items-center justify-between bg-white">
+              <div className="flex items-center gap-2">
+                <Menu className="text-gray-600" size={18} />
+                <h3 className="font-bold text-gray-900 text-sm">App Menu</h3>
+              </div>
+              <button 
+                onClick={() => setIsAppSidebarOpen(false)}
+                className="p-1.5 text-gray-400 hover:text-gray-600 hover:bg-gray-50 rounded-lg transition-colors cursor-pointer"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="flex-1 overflow-y-auto p-3 space-y-3">
+              {/* Folder 1: Profile (Settings & Institutional Identity) */}
+              <div className="border border-slate-200 rounded-xl overflow-hidden bg-white shadow-3xs">
+                <button
+                  type="button"
+                  onClick={() => setIsSidebarProfileFolderOpen(!isSidebarProfileFolderOpen)}
+                  className="w-full flex items-center justify-between p-3 hover:bg-gray-50 transition-colors text-left cursor-pointer bg-slate-50/70"
+                >
+                  <div className="flex items-center gap-2.5 text-gray-800 font-bold text-xs">
+                    <UserIcon size={16} className="text-indigo-600" />
+                    <span>Profile</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-[10px] font-semibold text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded-full border border-indigo-100/80">
+                      Settings
+                    </span>
+                    {isSidebarProfileFolderOpen ? (
+                      <ChevronDown size={15} className="text-gray-400" />
+                    ) : (
+                      <ChevronRight size={15} className="text-gray-400" />
+                    )}
+                  </div>
+                </button>
+
+                {isSidebarProfileFolderOpen && (
+                  <div className="p-3 border-t border-slate-100 bg-white">
+                    <SidebarProfileFolder
+                      sheetName={sheetName}
+                      sheetTagline={sheetTagline}
+                      treasurerName={treasurerName}
+                      treasurerEmail={treasurerEmail}
+                      academicYear={academicYear}
+                      logoIcon={logoIcon}
+                      allowedEmails={allowedEmails}
+                      isEditor={isEditor}
+                      currentUser={currentUser}
+                      onQuickUpdateLogo={handleQuickUpdateLogo}
+                      onSaveConfig={handleSaveConfig}
+                      onOpenFullSettings={() => {
+                        setActiveTab('settings');
+                        setIsAppSidebarOpen(false);
+                      }}
+                    />
+                  </div>
+                )}
+              </div>
+
+              {/* Folder 2: Treasurer Quick Templates (Standalone Separate Folder) */}
+              <div className="border border-slate-200 rounded-xl overflow-hidden bg-white shadow-3xs">
+                <button
+                  type="button"
+                  onClick={() => setIsSidebarTemplatesOpen(!isSidebarTemplatesOpen)}
+                  className="w-full flex items-center justify-between p-3 hover:bg-gray-50 transition-colors text-left cursor-pointer bg-slate-50/70"
+                >
+                  <div className="flex items-center gap-2.5 text-gray-800 font-bold text-xs">
+                    <Sparkles size={16} className="text-indigo-600 animate-pulse" />
+                    <span>Treasurer Quick Templates</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-[10px] font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-100/80">
+                      Templates
+                    </span>
+                    {isSidebarTemplatesOpen ? (
+                      <ChevronDown size={15} className="text-gray-400" />
+                    ) : (
+                      <ChevronRight size={15} className="text-gray-400" />
+                    )}
+                  </div>
+                </button>
+
+                {isSidebarTemplatesOpen && (
+                  <div className="p-3 border-t border-slate-100 bg-white space-y-3">
+                    <div className="flex items-center bg-indigo-50 p-1 rounded-lg text-xs">
+                      <button
+                        type="button"
+                        onClick={() => setActivePresetTab('standard')}
+                        className={`flex-1 py-1.5 rounded-md font-medium transition-all cursor-pointer ${
+                          activePresetTab === 'standard'
+                            ? 'bg-white text-indigo-950 shadow-xs'
+                            : 'text-indigo-700 hover:text-indigo-950'
+                        }`}
+                      >
+                        💡 Standard
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setActivePresetTab('ai')}
+                        className={`flex-1 py-1.5 rounded-md font-medium transition-all flex justify-center items-center gap-1 cursor-pointer ${
+                          activePresetTab === 'ai'
+                            ? 'bg-white text-indigo-950 shadow-xs'
+                            : 'text-indigo-700 hover:text-indigo-950'
+                        }`}
+                      >
+                        ✨ AI Recognized
+                        {aiPresets.length > 0 && (
+                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-ping inline-block" />
+                        )}
+                      </button>
+                    </div>
+
+                    <div className="mt-2">
+                      {activePresetTab === 'standard' ? (
+                        <div className="space-y-2.5 animate-fade-in">
+                          {standardPresets.map((p, idx) => (
+                            <button
+                              key={idx}
+                              type="button"
+                              disabled={!isEditor}
+                              onClick={() => handleApplyTemplate(p)}
+                              className={`w-full bg-white border rounded-lg text-left p-2.5 transition-all text-xs group ${
+                                isEditor 
+                                  ? 'border-indigo-100 hover:border-indigo-300 hover:shadow-xs cursor-pointer' 
+                                  : 'border-slate-200 opacity-60 cursor-not-allowed'
+                              }`}
+                            >
+                              <div className={`font-semibold flex items-center justify-between ${
+                                isEditor ? 'text-indigo-900 group-hover:text-indigo-700' : 'text-slate-500'
+                              }`}>
+                                <span>{p.label}</span>
+                                <span className="text-[10px] text-gray-400 font-mono tracking-tighter">
+                                  {isEditor ? 'Add +' : 'Locked'}
+                                </span>
+                              </div>
+                              <p className="text-gray-500 mt-1 line-clamp-2">{p.desc}</p>
+                            </button>
+                          ))}
+                        </div>
+                      ) : (
+                        <div className="animate-fade-in">
+                          {aiPresets.length === 0 ? (
+                            <div className="bg-indigo-50/50 border border-indigo-100/80 rounded-xl p-4 text-center flex flex-col items-center justify-center space-y-2.5">
+                              <div className="p-2.5 bg-white border border-indigo-100 text-indigo-600 rounded-full shadow-xs">
+                                <Sparkles size={20} className="animate-pulse" />
+                              </div>
+                              <div>
+                                <h4 className="text-xs font-bold text-indigo-950">No AI Templates Configured Yet</h4>
+                                <p className="text-[11px] text-slate-500 mt-1 leading-relaxed">
+                                  Let Gemini analyze your ledger entries to automatically recognize patterns and create templates!
+                                </p>
+                              </div>
+                              <button
+                                type="button"
+                                disabled={loadingAiPresets || !isEditor}
+                                onClick={handleGenerateAiPresets}
+                                className={`mt-1 flex items-center justify-center gap-1.5 w-full py-1.5 bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-300 text-white rounded-lg text-xs font-semibold shadow-xs cursor-pointer transition-colors ${
+                                  !isEditor ? 'opacity-50 cursor-not-allowed' : ''
+                                }`}
+                              >
+                                <RefreshCw size={13} className={loadingAiPresets ? 'animate-spin' : ''} />
+                                {loadingAiPresets ? 'Analyzing...' : 'Analyze Ledger'}
+                              </button>
+                            </div>
+                          ) : (
+                            <div className="space-y-2.5">
+                              <div className="flex flex-col gap-1.5 mb-2">
+                                <span className="text-[10px] text-slate-500 text-center">AI-optimized workflows recognized from your general ledger.</span>
+                                {isEditor && (
+                                  <button
+                                    type="button"
+                                    disabled={loadingAiPresets}
+                                    onClick={handleGenerateAiPresets}
+                                    className="text-indigo-600 bg-indigo-50 py-1.5 rounded-lg hover:bg-indigo-100 font-semibold flex justify-center items-center gap-1.5 cursor-pointer disabled:opacity-50 text-xs w-full transition-colors"
+                                  >
+                                    <RefreshCw size={12} className={loadingAiPresets ? 'animate-spin' : ''} />
+                                    {loadingAiPresets ? 'Re-analyzing...' : 'Refresh AI Analysis'}
+                                  </button>
+                                )}
+                              </div>
+                              {aiPresets.map((p, idx) => (
+                                <button
+                                  key={idx}
+                                  type="button"
+                                  disabled={!isEditor}
+                                  onClick={() => handleApplyTemplate(p)}
+                                  className={`w-full bg-indigo-50/20 border-2 rounded-lg text-left p-2.5 transition-all text-xs group ${
+                                    isEditor 
+                                      ? 'border-indigo-200/60 hover:border-indigo-400 hover:bg-white hover:shadow-xs cursor-pointer' 
+                                      : 'border-slate-200 opacity-60 cursor-not-allowed'
+                                  }`}
+                                >
+                                  <div className={`font-semibold flex items-center justify-between ${
+                                    isEditor ? 'text-indigo-950 group-hover:text-indigo-700' : 'text-slate-500'
+                                  }`}>
+                                    <span className="flex items-center gap-1">✨ {p.label}</span>
+                                    <span className="text-[9px] bg-indigo-100 text-indigo-700 px-1 py-0.5 rounded-sm font-semibold tracking-tighter uppercase">AI</span>
+                                  </div>
+                                  <p className="text-gray-500 mt-1 line-clamp-2">{p.desc}</p>
+                                  <div className="mt-1.5 pt-1.5 border-t border-slate-100 text-[10px] text-indigo-600 font-mono flex gap-1 justify-between">
+                                    <span className="truncate max-w-[50%]">Dr: {accounts.find(a => a.id === p.debit)?.name || `#${p.debit}`}</span>
+                                    <span className="truncate max-w-[50%] text-right">Cr: {accounts.find(a => a.id === p.credit)?.name || `#${p.credit}`}</span>
+                                  </div>
+                                </button>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
             </div>
           </div>
         </div>
