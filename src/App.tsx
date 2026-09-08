@@ -1095,17 +1095,18 @@ export default function App() {
       await signInWithPopup(auth, provider);
       showToast('Successfully authenticated with Google.', 'success');
     } catch (err: any) {
-      console.error('Sign-in error:', err);
-      // Suppress alert for user-cancelled popups
-      if (
+      const isPopupClosed = 
         err.code === 'auth/popup-closed-by-user' ||
         err.message?.includes('popup-closed-by-user') ||
         err.code === 'auth/cancelled-popup-request' ||
-        err.message?.includes('cancelled-popup-request')
-      ) {
-        console.log('User closed the login popup or request cancelled.');
+        err.message?.includes('cancelled-popup-request');
+
+      if (isPopupClosed) {
+        console.warn('User closed the login popup or request cancelled.');
         return;
       }
+
+      console.error('Sign-in error:', err);
       
       if (err.code === 'auth/unauthorized-domain') {
         showToast('Domain not authorized for OAuth. Please add your Netlify domain in Firebase Console -> Authentication -> Settings -> Authorized domains.', 'err');
@@ -1158,16 +1159,16 @@ export default function App() {
       {/* Top Banner header */}
       <header className="bg-white border-b border-gray-200 sticky top-0 z-40">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
-          <div className="flex items-center gap-3 mr-[33px] pb-[6px] pt-[7px] mb-[1px]">
+          <div className="flex items-center gap-3 mr-2">
             <div 
-              className="w-10 h-10 rounded-xl bg-gradient-to-tr from-blue-600 to-indigo-600 flex items-center justify-center text-white shadow-md cursor-pointer hover:opacity-90" 
+              className="w-10 h-10 rounded-xl bg-gradient-to-tr from-blue-600 to-indigo-600 flex items-center justify-center text-white shadow-md cursor-pointer hover:opacity-90 shrink-0" 
               onClick={() => setActiveTab('settings')} 
               title="Edit Profile & Settings"
             >
               <FolderLock size={20} />
             </div>
             <div>
-              <h1 className="text-base font-black tracking-tight text-gray-900 sm:text-lg flex items-center gap-1.5 leading-none">
+              <h1 className="text-sm font-black tracking-tight text-gray-900 sm:text-lg flex items-center gap-1.5 leading-none">
                 <span>{sheetName}</span>
                 <span className="text-[10px] bg-slate-100 border border-slate-200 text-slate-700 font-bold px-2 py-0.5 rounded-md uppercase font-mono hidden sm:inline-block">
                   {academicYear}
@@ -1183,44 +1184,44 @@ export default function App() {
                   <Edit size={13} />
                 </button>
               </h1>
-              <p className="text-[11px] text-gray-400 font-medium mt-1">{sheetTagline}</p>
+              <p className="text-[10px] sm:text-[11px] text-gray-400 font-medium mt-1 truncate max-w-[150px] sm:max-w-xs">{sheetTagline}</p>
             </div>
           </div>
 
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-1.5 sm:gap-3 shrink-0">
             {/* Google Authentication Control Badge */}
             {currentUser ? (
-              <div className="flex items-center gap-2 bg-slate-50 border border-gray-200 rounded-lg select-none -mr-[103px] -ml-[7px] pr-[9px] pt-[10px] pb-[15px] pl-[1px] text-[18px]">
+              <div className="flex items-center gap-1.5 sm:gap-2 bg-slate-50 border border-gray-200 rounded-lg select-none px-2 py-1 text-xs">
                 {currentUser.photoURL ? (
                   <img 
                     src={currentUser.photoURL} 
                     alt={currentUser.displayName || ''} 
-                    className="w-6 h-6 rounded-full border border-gray-300" 
+                    className="w-5 h-5 sm:w-6 sm:h-6 rounded-full border border-gray-300" 
                     referrerPolicy="no-referrer" 
                   />
                 ) : (
-                  <div className="w-6 h-6 rounded-full bg-indigo-100 text-indigo-700 font-bold text-xs flex items-center justify-center">
+                  <div className="w-5 h-5 sm:w-6 sm:h-6 rounded-full bg-indigo-100 text-indigo-700 font-bold text-[10px] sm:text-xs flex items-center justify-center">
                     {(currentUser.displayName || currentUser.email || 'U').charAt(0).toUpperCase()}
                   </div>
                 )}
-                <div className="hidden sm:block text-left leading-none max-w-[150px]">
+                <div className="hidden md:block text-left leading-none max-w-[120px]">
                   <p className="text-[10px] font-bold text-gray-800 truncate">{currentUser.displayName || 'Google Account'}</p>
                   <p className="text-[9px] text-gray-400 font-mono truncate">{currentUser.email}</p>
                 </div>
                 
                 {/* Access Level Status indicator */}
-                <span className={`text-[9px] font-mono font-bold px-1.5 py-0.5 rounded ${
+                <span className={`text-[8px] sm:text-[9px] font-mono font-bold px-1.5 py-0.5 rounded ${
                   isEditor 
                     ? 'bg-emerald-50 border border-emerald-200 text-emerald-700 font-extrabold flex items-center gap-1' 
                     : 'bg-amber-50 border border-amber-200 text-amber-700 font-extrabold flex items-center gap-1'
                 }`}>
-                  <span className={`w-1.5 h-1.5 rounded-full ${isEditor ? 'bg-emerald-500 animate-pulse' : 'bg-amber-400'}`} />
+                  <span className={`w-1 h-1 sm:w-1.5 sm:h-1.5 rounded-full ${isEditor ? 'bg-emerald-500 animate-pulse' : 'bg-amber-400'}`} />
                   {isEditor ? 'ADMIN' : 'READONLY'}
                 </span>
 
                 <button
                   onClick={handleSignOut}
-                  className="uppercase tracking-wider text-rose-600 hover:text-rose-800 font-bold border-l border-gray-200 pl-2 transition-colors cursor-pointer text-[10px] -ml-[7px] leading-[29.5px]"
+                  className="uppercase tracking-wider text-rose-600 hover:text-rose-800 font-extrabold border-l border-gray-200 pl-1.5 sm:pl-2 transition-colors cursor-pointer text-[9px] sm:text-[10px]"
                   title="Sign Out Google Account"
                 >
                   Logout
@@ -1229,22 +1230,22 @@ export default function App() {
             ) : (
               <button
                 onClick={handleSignIn}
-                className="inline-flex items-center gap-1.5 px-3 py-1 bg-white hover:bg-slate-50 border border-indigo-200 hover:border-indigo-300 text-indigo-600 text-xs rounded-lg font-bold transition-all shadow-3xs cursor-pointer cursor-pointers hover:scale-[1.01]"
+                className="inline-flex items-center gap-1.5 px-2.5 py-1.5 bg-white hover:bg-slate-50 border border-indigo-200 hover:border-indigo-300 text-indigo-600 text-[11px] sm:text-xs rounded-lg font-bold transition-all shadow-3xs cursor-pointer hover:scale-[1.01]"
                 title="Authenticate to Gain Authorizations"
               >
                 <div className="w-4 h-4 rounded-full bg-indigo-50 flex items-center justify-center">
                   <UserIcon size={11} className="text-indigo-600" />
                 </div>
-                <span>Sign In with Google</span>
+                <span>Sign In</span>
               </button>
             )}
 
             <button
               onClick={() => setIsHelpOpen(!isHelpOpen)}
-              className="inline-flex items-center gap-1.5 bg-gray-50 border border-gray-200 hover:bg-gray-100 text-gray-700 text-xs rounded-lg font-semibold transition-all shadow-3xs cursor-pointer -mr-[8px] ml-[95px] pb-[11px] pr-[1px] pt-[7px]"
+              className="inline-flex items-center gap-1 bg-gray-50 border border-gray-200 hover:bg-gray-100 text-gray-700 text-[11px] sm:text-xs rounded-lg font-semibold transition-all shadow-3xs cursor-pointer px-2.5 py-1.5"
             >
-              <HelpCircle size={14} className="text-gray-400 animate-pulse" />
-              Treasurer's Accounting Guide
+              <HelpCircle size={13} className="text-gray-400 animate-pulse shrink-0" />
+              <span className="hidden sm:inline">Guide</span>
             </button>
 
             {currentUser?.email && ['klrmuhsin809@gmail.com', 'yoonuschr@gmail.com'].includes(currentUser.email.toLowerCase()) && (
