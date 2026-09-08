@@ -1370,7 +1370,7 @@ export default function App() {
         )}
 
         {/* Tabs navigation list */}
-        <div className="bg-white border border-gray-200 rounded-xl p-1.5 flex flex-wrap gap-1 shadow-3xs sticky top-20 z-30">
+        <div className="bg-white border border-gray-200 rounded-xl p-1.5 flex overflow-x-auto gap-1 shadow-3xs sticky top-16 sm:top-20 z-30 whitespace-nowrap [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden scroll-smooth">
           {[
             { id: 'journal', label: 'Journal Spreadsheet', icon: FileText, color: 'text-indigo-600' },
             { id: 'ledgers', label: 'General Ledger', icon: BookOpen, color: 'text-blue-600' },
@@ -1387,7 +1387,7 @@ export default function App() {
                 key={tab.id}
                 onClick={() => setActiveTab(isActive ? 'journal' : (tab.id as any))}
                 title={isActive ? `Go to Journal Spreadsheet` : `Select ${tab.label}`}
-                className={`flex-1 min-w-[150px] inline-flex items-center gap-2 justify-center py-2.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                className={`flex-none inline-flex items-center gap-2 px-4 py-2.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
                   isActive
                     ? 'bg-slate-900 text-white shadow-xs scale-[0.98]'
                     : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'

@@ -101,7 +101,7 @@ export function DashboardCards({ accounts, entries, onDuesClick, activeTab }: Da
   }
 
   return (
-    <div className={`grid grid-cols-1 sm:grid-cols-2 ${onDuesClick ? 'lg:grid-cols-3 xl:grid-cols-6' : 'lg:grid-cols-5'} gap-4 mb-6`}>
+    <div className={`grid grid-cols-2 sm:grid-cols-2 ${onDuesClick ? 'lg:grid-cols-3 xl:grid-cols-6' : 'lg:grid-cols-5'} gap-2 sm:gap-4 mb-4 sm:mb-6`}>
       {cards.map((card, idx) => {
         const Icon = card.icon;
         const isClickable = 'onClick' in card;
