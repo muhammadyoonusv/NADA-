@@ -733,42 +733,44 @@ export function JournalSheet({
           </div>
 
           {/* Right Toolbar Options */}
-          <div className="flex flex-wrap gap-2 justify-end w-full md:w-auto">
-            <button
-              onClick={handleOpenAdd}
-              disabled={!isEditor}
-              title={isEditor ? "Record a new journal transaction row" : "Transaction addition restricted to authorized union editors only."}
-              className="inline-flex items-center gap-1.5 px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-slate-350 disabled:text-slate-500 disabled:opacity-50 text-white rounded-lg text-sm font-medium shadow-xs transition-all disabled:cursor-not-allowed"
-            >
-              <PlusCircle size={16} />
-              <span>Record Entry</span>
-            </button>
+          <div className="flex flex-col sm:flex-row justify-between items-center gap-2 w-full md:w-auto md:flex-1">
+            <div className="flex gap-2 w-full sm:w-auto justify-start">
+              <button
+                onClick={handleOpenAdd}
+                disabled={!isEditor}
+                title={isEditor ? "Record a new journal transaction row" : "Transaction addition restricted to authorized union editors only."}
+                className="flex-1 sm:flex-initial inline-flex items-center justify-center gap-1.5 px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-slate-350 disabled:text-slate-500 disabled:opacity-50 text-white rounded-lg text-sm font-medium shadow-xs transition-all disabled:cursor-not-allowed"
+              >
+                <PlusCircle size={16} />
+                <span>Record Entry</span>
+              </button>
 
-            <button
-              onClick={() => setIsPdfModalOpen(true)}
-              title="Review audited financial statements and save formatted PDF reports"
-              className="inline-flex items-center gap-1.5 px-3 py-2 bg-rose-600 hover:bg-rose-700 text-white border border-rose-700 rounded-lg text-sm font-semibold transition-all cursor-pointer shadow-xs"
-            >
-              <FileText size={16} />
-              Review & Save PDF
-            </button>
+              <button
+                onClick={() => setIsPdfModalOpen(true)}
+                title="Review audited financial statements and save formatted PDF reports"
+                className="flex-1 sm:flex-initial inline-flex items-center justify-center gap-1.5 px-3 py-2 bg-rose-600 hover:bg-rose-700 text-white border border-rose-700 rounded-lg text-sm font-semibold transition-all cursor-pointer shadow-xs"
+              >
+                <FileText size={16} />
+                <span>Review & Save PDF</span>
+              </button>
+            </div>
 
-            <button
-              onClick={handleExportBackup}
-              title="Backup JSON file"
-              className="inline-flex items-center gap-1.5 px-3 py-2 bg-white hover:bg-gray-50 text-gray-700 border border-gray-200 rounded-lg text-sm font-medium transition-all"
-            >
-              <Download size={16} className="text-blue-500" />
-              Backup Ledger
-            </button>
+            <div className="flex gap-2 w-full sm:w-auto justify-end">
+              <button
+                onClick={handleExportBackup}
+                title="Backup JSON file"
+                className="flex-1 sm:flex-initial inline-flex items-center justify-center gap-1.5 px-3 py-2 bg-white hover:bg-gray-50 text-gray-700 border border-gray-200 rounded-lg text-sm font-medium transition-all cursor-pointer"
+              >
+                <Download size={16} className="text-blue-500" />
+                <span>Backup Ledger</span>
+              </button>
 
-            <label className="inline-flex items-center gap-1.5 px-3 py-2 bg-white hover:bg-gray-50 text-gray-700 border border-gray-200 rounded-lg text-sm font-medium transition-all cursor-pointer">
-              <Upload size={16} className="text-indigo-500" />
-              Import Backup
-              <input type="file" accept=".json" onChange={handleFileImport} className="hidden" />
-            </label>
-
-
+              <label className="flex-1 sm:flex-initial inline-flex items-center justify-center gap-1.5 px-3 py-2 bg-white hover:bg-gray-50 text-gray-700 border border-gray-200 rounded-lg text-sm font-medium transition-all cursor-pointer">
+                <Upload size={16} className="text-indigo-500" />
+                <span>Import Backup</span>
+                <input type="file" accept=".json" onChange={handleFileImport} className="hidden" />
+              </label>
+            </div>
           </div>
         </div>
 

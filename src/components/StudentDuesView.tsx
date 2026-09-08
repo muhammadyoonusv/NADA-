@@ -1178,17 +1178,17 @@ export function StudentDuesView({
         </div>
 
         {/* Global Toolbar and Folder Buttons - Only visible to editors */}
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="grid grid-cols-2 gap-2 w-full md:flex md:flex-wrap md:items-center md:gap-2 md:w-auto">
           {isEditor && activeView !== 'folders' && (
             <button
               onClick={() => {
                 setActiveView('folders');
                 setSelectedProgramId(null);
               }}
-              className="inline-flex items-center gap-1 px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-xl transition-colors cursor-pointer"
+              className="w-full justify-center inline-flex items-center gap-1.5 px-3 py-3 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-xl transition-colors cursor-pointer"
             >
               <ArrowLeft size={13} />
-              Back to Program Folders
+              <span>Back to Folders</span>
             </button>
           )}
 
@@ -1199,10 +1199,10 @@ export function StudentDuesView({
                 setSelectedProgramId(null);
                 setSearchTerm('');
               }}
-              className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-slate-50 border border-gray-200 text-slate-600 hover:bg-slate-100 hover:text-slate-950 text-xs font-bold rounded-xl transition-all shadow-3xs cursor-pointer"
+              className="w-full justify-center inline-flex items-center gap-1.5 px-3.5 py-3 bg-slate-50 border border-gray-200 text-slate-600 hover:bg-slate-100 hover:text-slate-950 text-xs font-bold rounded-xl transition-all shadow-3xs cursor-pointer"
             >
               <ClipboardList size={13} className="text-slate-500" />
-              Manage Master Roster ({quranStudentsList.length})
+              <span>Manage Roster ({quranStudentsList.length})</span>
             </button>
           )}
 
@@ -1216,20 +1216,20 @@ export function StudentDuesView({
                 setStudentRemarks('');
                 setIsAddStudentOpen(true);
               }}
-              className="inline-flex items-center gap-1 px-3 py-2 bg-white border border-gray-200 hover:bg-gray-50 text-slate-800 text-xs font-bold rounded-xl shadow-3xs transition-all cursor-pointer"
+              className="w-full justify-center inline-flex items-center gap-1.5 px-3 py-3 bg-white border border-gray-200 hover:bg-gray-50 text-slate-800 text-xs font-bold rounded-xl shadow-3xs transition-all cursor-pointer"
             >
               <UserPlus size={13} className="text-indigo-600" />
-              Enroll Single Student
+              <span>Enroll Student</span>
             </button>
           )}
 
           {isEditor && (
             <button
               onClick={() => setIsAddProgramOpen(true)}
-              className="inline-flex items-center gap-1.5 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-xl shadow-sm hover:shadow-xs transition-colors cursor-pointer"
+              className="w-full justify-center inline-flex items-center gap-1.5 px-4 py-3 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-xl shadow-sm hover:shadow-xs transition-colors cursor-pointer"
             >
               <FolderPlus size={13} />
-              New Drive Folder
+              <span>New Drive Folder</span>
             </button>
           )}
         </div>
@@ -1438,14 +1438,13 @@ export function StudentDuesView({
             </span>
           </div>
 
-          {/* Roster Table */}
-          <div className="bg-white border border-gray-200 rounded-2xl overflow-hidden shadow-3xs">
+          {/* Roster Table (Desktop View) */}
+          <div className="hidden md:block bg-white border border-gray-200 rounded-2xl overflow-hidden shadow-3xs">
             <table className="w-full text-left text-xs">
               <thead>
                 <tr className="bg-slate-50 border-b border-gray-200 font-mono text-[10px] text-slate-505 font-bold uppercase">
                   <th className="p-4">Roll No / ID</th>
                   <th className="p-4">Student Name</th>
-                  <th className="p-4">Class Department</th>
                   <th className="p-4">Particular Notes</th>
                   {isEditor && <th className="p-4 text-right">Actions</th>}
                 </tr>
@@ -1453,7 +1452,7 @@ export function StudentDuesView({
               <tbody className="divide-y divide-slate-105">
                 {filteredRows.length === 0 ? (
                   <tr>
-                    <td colSpan={isEditor ? 5 : 4} className="p-12 text-slate-400 text-center">
+                    <td colSpan={isEditor ? 4 : 3} className="p-12 text-slate-400 text-center">
                       <Users size={20} className="mx-auto mb-2 text-slate-300" />
                       <p>No master student records match query.</p>
                     </td>
@@ -1463,7 +1462,6 @@ export function StudentDuesView({
                     <tr key={stu.id} className="hover:bg-slate-50/50 leading-relaxed font-medium text-slate-600">
                       <td className="p-4 font-bold font-mono text-slate-900 uppercase">{stu.id}</td>
                       <td className="p-4 text-slate-900 font-semibold">{stu.name}</td>
-                      <td className="p-4 font-bold text-indigo-700">{stu.className || 'CLASS UNION'}</td>
                       <td className="p-4 text-slate-400 text-[11px]">{stu.remarks || <span className="italic text-gray-200">No remarks</span>}</td>
                       {isEditor && (
                         <td className="p-4 text-right">
@@ -1490,6 +1488,53 @@ export function StudentDuesView({
                 )}
               </tbody>
             </table>
+          </div>
+
+          {/* Roster Cards (Mobile View) */}
+          <div className="block md:hidden space-y-3">
+            {filteredRows.length === 0 ? (
+              <div className="bg-white p-8 text-center border border-gray-200 rounded-2xl text-slate-400">
+                <Users size={20} className="mx-auto mb-2 text-slate-300" />
+                <p>No master student records match query.</p>
+              </div>
+            ) : (
+              filteredRows.map(stu => (
+                <div key={stu.id} className="bg-white border border-gray-200 p-4 rounded-xl space-y-3 shadow-3xs">
+                  <div className="flex justify-between items-start gap-2">
+                    <div>
+                      <span className="text-[10px] font-bold font-mono text-slate-400 block uppercase">{stu.id}</span>
+                      <span className="font-bold text-slate-900 text-sm">{stu.name}</span>
+                    </div>
+                  </div>
+
+                  {stu.remarks && (
+                    <div className="text-[11px] text-slate-500 bg-slate-50 p-2.5 rounded-lg">
+                      {stu.remarks}
+                    </div>
+                  )}
+
+                  {isEditor && (
+                    <div className="flex gap-2 pt-1 border-t border-slate-100">
+                      <button
+                        type="button"
+                        onClick={() => handleOpenEditMaster(stu)}
+                        className="flex-1 inline-flex items-center justify-center gap-1.5 py-2.5 border border-indigo-200 hover:border-indigo-600 bg-indigo-50 hover:bg-indigo-600 text-indigo-750 hover:text-white rounded-lg text-xs font-bold transition-all cursor-pointer"
+                      >
+                        <Edit size={12} /> Edit Details
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setDeletingStudentId(stu.id)}
+                        className="px-3.5 py-2.5 text-rose-600 hover:text-white border border-rose-200 hover:border-rose-600 bg-rose-50 hover:bg-rose-600 rounded-lg transition-all flex items-center justify-center cursor-pointer"
+                        title="Delete profile"
+                      >
+                        <Trash2 size={13} />
+                      </button>
+                    </div>
+                  )}
+                </div>
+              ))
+            )}
           </div>
         </div>
       )}
@@ -1685,8 +1730,8 @@ export function StudentDuesView({
             </div>
           )}
 
-          {/* Interactive Dues Table */}
-          <div className="bg-white border border-gray-200 rounded-2xl overflow-hidden shadow-3xs">
+          {/* Interactive Dues Table (Desktop View) */}
+          <div className="hidden md:block bg-white border border-gray-200 rounded-2xl overflow-hidden shadow-3xs">
             <div className="overflow-x-auto">
               <table className="w-full text-left text-xs font-medium">
                 <thead>
@@ -1720,7 +1765,6 @@ export function StudentDuesView({
                     <th className="p-4 cursor-pointer hover:bg-slate-100" onClick={() => requestSort('name')}>
                       Member Name {sortBy === 'name' && (sortOrder === 'asc' ? '↑' : '↓')}
                     </th>
-                    <th className="p-4 text-left">Class Department</th>
                     <th className="p-4 cursor-pointer hover:bg-slate-100 text-right" onClick={() => requestSort('paid')}>
                       Drive Given (Dr) {sortBy === 'paid' && (sortOrder === 'asc' ? '↑' : '↓')}
                     </th>
@@ -1736,7 +1780,7 @@ export function StudentDuesView({
                 <tbody className="divide-y divide-slate-105">
                   {filteredRows.length === 0 ? (
                     <tr>
-                      <td colSpan={isEditor ? 10 : 8} className="p-12 text-slate-400 text-center">
+                      <td colSpan={isEditor ? 9 : 7} className="p-12 text-slate-400 text-center">
                         <Users size={20} className="mx-auto mb-2 text-slate-300" />
                         <p>No student payments found matching your filter selection.</p>
                       </td>
@@ -1786,11 +1830,6 @@ export function StudentDuesView({
                             <div>
                               <span>{row.student.name}</span>
                             </div>
-                          </td>
-
-                          {/* Class Department */}
-                          <td className="p-4 text-indigo-700 font-bold text-left whitespace-nowrap">
-                            {row.student.className || 'CLASS UNION'}
                           </td>
 
                           {/* Paid quantity */}
@@ -1881,6 +1920,141 @@ export function StudentDuesView({
                 </tbody>
               </table>
             </div>
+          </div>
+
+          {/* Interactive Dues Cards (Mobile View) */}
+          <div className="block md:hidden space-y-3">
+            {filteredRows.length === 0 ? (
+              <div className="bg-white p-8 text-center border border-gray-200 rounded-2xl text-slate-400 shadow-3xs">
+                <Users size={20} className="mx-auto mb-2 text-slate-300" />
+                <p>No student payments found matching your filter selection.</p>
+              </div>
+            ) : (
+              filteredRows.map((row) => {
+                const balance = Math.max(0, row.dues.totalDue - row.dues.amountPaid);
+                const pct = row.dues.totalDue > 0 ? Math.min(100, Math.round((row.dues.amountPaid / row.dues.totalDue) * 100)) : 0;
+                const isSelected = selectedStudentIds.includes(row.student.id);
+                
+                return (
+                  <div 
+                    key={row.student.id} 
+                    className={`bg-white border p-4 rounded-xl space-y-3 shadow-3xs transition-colors ${
+                      isSelected 
+                        ? 'border-rose-300 bg-rose-50/10' 
+                        : 'border-gray-200'
+                    }`}
+                  >
+                    {/* Header: ID, Name, Badge, Select checkbox */}
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="flex items-center gap-2">
+                        {isEditor && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setSelectedStudentIds(prev => 
+                                isSelected ? prev.filter(id => id !== row.student.id) : [...prev, row.student.id]
+                              );
+                            }}
+                            className="p-1 text-slate-400 hover:text-indigo-600 transition-colors focus:outline-none flex items-center justify-center"
+                          >
+                            {isSelected ? (
+                              <CheckSquare size={16} className="text-indigo-600" />
+                            ) : (
+                              <Square size={16} />
+                            )}
+                          </button>
+                        )}
+                        <div>
+                          <span className="text-[10px] font-bold font-mono text-slate-400 block uppercase">{row.student.id}</span>
+                          <span className="font-bold text-slate-900 text-sm leading-snug block">{row.student.name}</span>
+                        </div>
+                      </div>
+                      
+                      <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 text-[10px] font-bold rounded-full border shrink-0 ${
+                        row.dues.status === 'Paid' 
+                          ? 'bg-emerald-50 text-emerald-700 border-emerald-150' 
+                          : row.dues.status === 'Partial' 
+                          ? 'bg-amber-50 text-amber-700 border-amber-150' 
+                          : 'bg-rose-50 text-rose-700 border-rose-150'
+                      }`}>
+                        {row.dues.status}
+                      </span>
+                    </div>
+
+                    {/* Financial stats row */}
+                    <div className="grid grid-cols-2 gap-3 bg-slate-50 p-3 rounded-lg text-xs">
+                      <div>
+                        <span className="text-[9px] uppercase tracking-wider text-slate-400 font-bold block font-mono">Given (Dr)</span>
+                        <span className="font-mono font-extrabold text-slate-950 text-sm">₹{row.dues.amountPaid.toLocaleString('en-IN')}</span>
+                      </div>
+                      <div className="text-right">
+                        <span className="text-[9px] uppercase tracking-wider text-slate-400 font-bold block font-mono">Remaining (Cr)</span>
+                        <span className={`font-mono font-extrabold text-sm ${balance > 0 ? 'text-rose-600' : 'text-emerald-600'}`}>
+                          ₹{balance.toLocaleString('en-IN')}
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Progress slider */}
+                    <div className="space-y-1">
+                      <div className="w-full bg-slate-100 h-1.5 rounded-full overflow-hidden">
+                        <div 
+                          className={`h-full rounded-full transition-all ${
+                            row.dues.status === 'Paid' ? 'bg-emerald-500' :
+                            row.dues.status === 'Partial' ? 'bg-amber-500' :
+                            'bg-slate-200'
+                          }`} 
+                          style={{ width: `${pct}%` }}
+                        />
+                      </div>
+                      <div className="flex justify-between text-[9px] font-mono text-slate-400 font-bold">
+                        <span>{pct}% Collected</span>
+                        <span>Target: ₹{row.dues.totalDue.toLocaleString('en-IN')}</span>
+                      </div>
+                    </div>
+
+                    {/* Remarks and metadata */}
+                    {(row.dues.lastPaymentDate || row.dues.remarks) && (
+                      <div className="text-[10px] border-t border-slate-100 pt-2 text-slate-400 leading-normal space-y-0.5">
+                        {row.dues.lastPaymentDate && (
+                          <div>📅 Last pay: <span className="font-bold text-slate-705">{row.dues.lastPaymentDate}</span></div>
+                        )}
+                        {row.dues.remarks && (
+                          <div className="italic text-slate-500">“{row.dues.remarks}”</div>
+                        )}
+                      </div>
+                    )}
+
+                    {/* Actions panel */}
+                    {isEditor && (
+                      <div className="flex gap-2 pt-1 border-t border-slate-100">
+                        {balance > 0 ? (
+                          <button
+                            type="button"
+                            onClick={() => handleSelectPayStudent(row.student.id, row.dues)}
+                            className="flex-1 inline-flex items-center justify-center gap-1.5 py-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-extrabold cursor-pointer transition-all shadow-3xs"
+                          >
+                            <CreditCard size={12} /> Record Pay
+                          </button>
+                        ) : (
+                          <div className="flex-1 py-2.5 bg-emerald-50 text-emerald-700 rounded-lg text-xs font-bold flex items-center justify-center gap-1 border border-emerald-150">
+                            <Check size={12} /> Balance Settled
+                          </div>
+                        )}
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveStudentFromProgram(row.student.id)}
+                          className="px-3 py-2.5 text-slate-405 hover:text-rose-605 hover:bg-rose-50 border border-slate-205 hover:border-rose-205 rounded-lg transition-all cursor-pointer flex items-center justify-center"
+                          title="Remove student from this campaign folder"
+                        >
+                          <Trash2 size={13} />
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                );
+              })
+            )}
           </div>
 
           {/* Double entry automation helper reference */}
@@ -2011,30 +2185,17 @@ export function StudentDuesView({
               </div>
 
               <form onSubmit={handleSubmitMasterStudent} className="p-6 space-y-4">
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="block text-[10px] font-bold text-slate-505 uppercase tracking-wider font-mono mb-1">Roll No / ID *</label>
-                    <input
-                      type="text"
-                      required
-                      placeholder="e.g. QURAN-101"
-                      disabled={!!editingStudent}
-                      value={studentId}
-                      onChange={(e) => setStudentId(e.target.value)}
-                      className="w-full p-2 bg-gray-50 text-xs border border-gray-205 rounded-lg outline-none focus:ring-1 focus:ring-indigo-400 focus:bg-white text-slate-900 font-bold uppercase disabled:opacity-50"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-[10px] font-bold text-slate-550 uppercase tracking-wider font-mono mb-1">Class Department</label>
-                    <input
-                      type="text"
-                      required
-                      placeholder="QURAN DEPARTMENT"
-                      value={studentClass}
-                      onChange={(e) => setStudentClass(e.target.value)}
-                      className="w-full p-2 bg-gray-50 text-xs border border-gray-205 rounded-lg outline-none focus:ring-1 focus:ring-indigo-400 focus:bg-white text-slate-900 font-bold"
-                    />
-                  </div>
+                <div>
+                  <label className="block text-[10px] font-bold text-slate-505 uppercase tracking-wider font-mono mb-1">Roll No / ID *</label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="e.g. QURAN-101"
+                    disabled={!!editingStudent}
+                    value={studentId}
+                    onChange={(e) => setStudentId(e.target.value)}
+                    className="w-full p-2 bg-gray-50 text-xs border border-gray-205 rounded-lg outline-none focus:ring-1 focus:ring-indigo-400 focus:bg-white text-slate-900 font-bold uppercase disabled:opacity-50"
+                  />
                 </div>
 
                 <div>
@@ -2183,30 +2344,96 @@ export function StudentDuesView({
 
                 {/* Mode Grid: Editable spreadsheet-like roster list */}
                 {bulkMode === 'grid' && (
-                  <div className="bg-white border border-gray-200 rounded-2xl overflow-hidden shadow-sm">
-                    <table className="w-full text-left text-xs table-fixed">
-                      <thead className="sticky top-0 bg-slate-50 border-b border-gray-200 shadow-3xs z-10 font-mono text-[10px] text-slate-505 font-bold uppercase">
-                        <tr>
-                          <th className="p-3 w-[110px]">Roll No</th>
-                          <th className="p-3 w-[190px]">Student Name</th>
-                          <th className="p-3 w-[170px]">Class Department</th>
-                          <th className="p-3 w-[140px] text-right">Given Amount (₹)</th>
-                          <th className="p-3 w-[140px] text-right">Total Due Target (₹)</th>
-                          <th className="p-3">Remarks Notes for Drive</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-slate-105">
-                        {folderStudents.map((stu, idx) => {
-                          const state = bulkGridDues[stu.id] || { paid: '0', due: activeProgram.defaultAmount.toString(), remarks: '' };
-                          
-                          return (
-                            <tr key={stu.id} className="hover:bg-slate-50/50 leading-none">
-                              <td className="p-2 font-mono font-bold text-slate-900 text-left uppercase truncate">{stu.id}</td>
-                              <td className="p-2 text-slate-900 font-bold truncate text-left">{stu.name}</td>
-                              <td className="p-2 text-indigo-750 font-semibold truncate text-left">{stu.className || 'QURAN DEPARTMENT'}</td>
-                              
-                              {/* Given paid input */}
-                              <td className="p-1">
+                  <>
+                    {/* Desktop View */}
+                    <div className="hidden md:block bg-white border border-gray-200 rounded-2xl overflow-hidden shadow-sm">
+                      <table className="w-full text-left text-xs table-fixed">
+                        <thead className="sticky top-0 bg-slate-50 border-b border-gray-200 shadow-3xs z-10 font-mono text-[10px] text-slate-505 font-bold uppercase">
+                          <tr>
+                            <th className="p-3 w-[110px]">Roll No</th>
+                            <th className="p-3 w-[190px]">Student Name</th>
+                            <th className="p-3 w-[140px] text-right">Given Amount (₹)</th>
+                            <th className="p-3 w-[140px] text-right">Total Due Target (₹)</th>
+                            <th className="p-3">Remarks Notes for Drive</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-105">
+                          {folderStudents.map((stu, idx) => {
+                            const state = bulkGridDues[stu.id] || { paid: '0', due: activeProgram.defaultAmount.toString(), remarks: '' };
+                            
+                            return (
+                              <tr key={stu.id} className="hover:bg-slate-50/50 leading-none">
+                                <td className="p-2 font-mono font-bold text-slate-900 text-left uppercase truncate">{stu.id}</td>
+                                <td className="p-2 text-slate-900 font-bold truncate text-left">{stu.name}</td>
+                                
+                                {/* Given paid input */}
+                                <td className="p-1">
+                                  <input
+                                    type="number"
+                                    min={0}
+                                    value={state.paid}
+                                    onChange={(e) => {
+                                      setBulkGridDues(prev => ({
+                                        ...prev,
+                                        [stu.id]: { ...state, paid: e.target.value }
+                                      }));
+                                    }}
+                                    className="w-full p-2 bg-gray-50 border border-transparent hover:border-gray-300 focus:bg-white focus:border-indigo-400 font-mono font-bold text-xs text-right text-indigo-700 outline-none rounded-lg"
+                                  />
+                                </td>
+
+                                {/* Due Target target dues */}
+                                <td className="p-1">
+                                  <input
+                                    type="number"
+                                    min={0}
+                                    value={state.due}
+                                    onChange={(e) => {
+                                      setBulkGridDues(prev => ({
+                                        ...prev,
+                                        [stu.id]: { ...state, due: e.target.value }
+                                      }));
+                                    }}
+                                    className="w-full p-2 bg-gray-50 border border-transparent hover:border-gray-300 focus:bg-white focus:border-indigo-400 font-mono font-bold text-xs text-right text-slate-800 outline-none rounded-lg"
+                                  />
+                                </td>
+
+                                {/* Remarks notes */}
+                                <td className="p-1">
+                                  <input
+                                    type="text"
+                                    value={state.remarks}
+                                    placeholder="e.g. Collected cash receipt, Paid GPay"
+                                    onChange={(e) => {
+                                      setBulkGridDues(prev => ({
+                                        ...prev,
+                                        [stu.id]: { ...state, remarks: e.target.value }
+                                      }));
+                                    }}
+                                    className="w-full p-2 bg-gray-50 border border-transparent hover:border-gray-300 focus:bg-white focus:border-indigo-400 text-xs text-slate-700 outline-none rounded-lg"
+                                  />
+                                </td>
+
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+
+                    {/* Mobile View */}
+                    <div className="block md:hidden space-y-3">
+                      {folderStudents.map((stu, idx) => {
+                        const state = bulkGridDues[stu.id] || { paid: '0', due: activeProgram.defaultAmount.toString(), remarks: '' };
+                        return (
+                          <div key={stu.id} className="bg-white border border-gray-200 p-4 rounded-xl space-y-3.5 shadow-3xs text-left">
+                            <div className="flex justify-between items-center border-b border-gray-100 pb-2">
+                              <span className="text-[10px] font-mono font-bold text-slate-400 uppercase">{stu.id}</span>
+                              <span className="font-extrabold text-slate-900 text-xs truncate max-w-[200px]">{stu.name}</span>
+                            </div>
+                            <div className="grid grid-cols-2 gap-3">
+                              <div>
+                                <label className="block text-[9px] uppercase tracking-wider text-slate-400 font-extrabold mb-1">Given Amount (₹)</label>
                                 <input
                                   type="number"
                                   min={0}
@@ -2217,12 +2444,11 @@ export function StudentDuesView({
                                       [stu.id]: { ...state, paid: e.target.value }
                                     }));
                                   }}
-                                  className="w-full p-2 bg-gray-50 border border-transparent hover:border-gray-300 focus:bg-white focus:border-indigo-400 font-mono font-bold text-xs text-right text-indigo-700 outline-none rounded-lg"
+                                  className="w-full p-2.5 bg-gray-50 border border-gray-200 font-mono font-bold text-xs text-indigo-700 outline-none rounded-lg focus:bg-white focus:border-indigo-400"
                                 />
-                              </td>
-
-                              {/* Due Target target dues */}
-                              <td className="p-1">
+                              </div>
+                              <div>
+                                <label className="block text-[9px] uppercase tracking-wider text-slate-400 font-extrabold mb-1">Target Due (₹)</label>
                                 <input
                                   type="number"
                                   min={0}
@@ -2233,32 +2459,30 @@ export function StudentDuesView({
                                       [stu.id]: { ...state, due: e.target.value }
                                     }));
                                   }}
-                                  className="w-full p-2 bg-gray-50 border border-transparent hover:border-gray-300 focus:bg-white focus:border-indigo-400 font-mono font-bold text-xs text-right text-slate-800 outline-none rounded-lg"
+                                  className="w-full p-2.5 bg-gray-50 border border-gray-200 font-mono font-bold text-xs text-slate-800 outline-none rounded-lg focus:bg-white focus:border-indigo-400"
                                 />
-                              </td>
-
-                              {/* Remarks notes */}
-                              <td className="p-1">
-                                <input
-                                  type="text"
-                                  value={state.remarks}
-                                  placeholder="e.g. Collected cash receipt, Paid GPay"
-                                  onChange={(e) => {
-                                    setBulkGridDues(prev => ({
-                                      ...prev,
-                                      [stu.id]: { ...state, remarks: e.target.value }
-                                    }));
-                                  }}
-                                  className="w-full p-2 bg-gray-50 border border-transparent hover:border-gray-300 focus:bg-white focus:border-indigo-400 text-xs text-slate-700 outline-none rounded-lg"
-                                />
-                              </td>
-
-                            </tr>
-                          );
-                        })}
-                      </tbody>
-                    </table>
-                  </div>
+                              </div>
+                            </div>
+                            <div>
+                              <label className="block text-[9px] uppercase tracking-wider text-slate-400 font-extrabold mb-1">Tracking Remarks</label>
+                              <input
+                                type="text"
+                                value={state.remarks}
+                                placeholder="e.g. Collected cash receipt, Paid GPay"
+                                onChange={(e) => {
+                                  setBulkGridDues(prev => ({
+                                    ...prev,
+                                    [stu.id]: { ...state, remarks: e.target.value }
+                                  }));
+                                }}
+                                className="w-full p-2.5 bg-gray-50 border border-gray-200 text-xs text-slate-700 outline-none rounded-lg focus:bg-white focus:border-indigo-400 font-semibold"
+                              />
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </>
                 )}
 
                 {/* Mode Paste: Raw text parsing block */}

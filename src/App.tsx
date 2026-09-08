@@ -61,7 +61,18 @@ import {
   AlertCircle,
   CheckCircle,
   Info,
-  X
+  X,
+  Shield,
+  Award,
+  Star,
+  Heart,
+  Zap,
+  Building2,
+  Briefcase,
+  GraduationCap,
+  Users,
+  Image,
+  Upload
 } from 'lucide-react';
 
 const DEFAULT_STUDENTS: Student[] = [];
@@ -155,6 +166,7 @@ export default function App() {
   }, [toast]);
 
   const [activeTab, setActiveTab] = useState<'journal' | 'ledgers' | 'trial' | 'receipts' | 'expenditure' | 'balance' | 'chart' | 'dues' | 'settings'>('journal');
+  const [isReportsMobileMenuOpen, setIsReportsMobileMenuOpen] = useState(false);
   const [isHelpOpen, setIsHelpOpen] = useState(false);
 
   // Profile and sheet details state
@@ -163,6 +175,7 @@ export default function App() {
   const [treasurerName, setTreasurerName] = useState('Union Treasurer');
   const [treasurerEmail, setTreasurerEmail] = useState('');
   const [academicYear, setAcademicYear] = useState('2026 - 2027');
+  const [logoIcon, setLogoIcon] = useState<string>('FolderLock');
 
   // Connection/Loading states
   const [loadingAccounts, setLoadingAccounts] = useState(true);
@@ -252,6 +265,7 @@ export default function App() {
               treasurerName: 'Union Treasurer',
               treasurerEmail: '',
               academicYear: '2026 - 2027',
+              logoIcon: 'FolderLock',
               allowedEmails: ['klrmuhsin809@gmail.com', 'yoonuschr@gmail.com']
             });
           } catch (err) {
@@ -263,6 +277,7 @@ export default function App() {
           setTreasurerName('Union Treasurer');
           setTreasurerEmail('');
           setAcademicYear('2026 - 2027');
+          setLogoIcon('FolderLock');
           setAllowedEmails(['klrmuhsin809@gmail.com', 'yoonuschr@gmail.com']);
           setLoadingMetadata(false);
         }
@@ -273,6 +288,7 @@ export default function App() {
         setTreasurerName(data.treasurerName || 'Union Treasurer');
         setTreasurerEmail(data.treasurerEmail || '');
         setAcademicYear(data.academicYear || '2026 - 2027');
+        setLogoIcon(data.logoIcon || 'FolderLock');
         setAllowedEmails([
           'klrmuhsin809@gmail.com',
           'yoonuschr@gmail.com'
@@ -1065,6 +1081,7 @@ export default function App() {
     treasurerEmail: string;
     academicYear: string;
     allowedEmails: string[];
+    logoIcon: string;
   }) => {
     if (!isEditor) {
       showToast('Access denied: Only authorized editors can update settings.', 'err');
@@ -1077,6 +1094,7 @@ export default function App() {
         treasurerName: config.treasurerName,
         treasurerEmail: config.treasurerEmail,
         academicYear: config.academicYear,
+        logoIcon: config.logoIcon,
         allowedEmails: [
           'klrmuhsin809@gmail.com',
           'yoonuschr@gmail.com'
@@ -1155,26 +1173,49 @@ export default function App() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-50 text-slate-800 flex flex-col font-sans transition-colors duration-250">
+    <div className="min-h-screen bg-slate-50 text-slate-800 flex flex-col font-sans transition-colors duration-250 pb-20 md:pb-0">
       {/* Top Banner header */}
       <header className="bg-white border-b border-gray-200 sticky top-0 z-40">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
           <div className="flex items-center gap-3 mr-2">
             <div 
-              className="w-10 h-10 rounded-xl bg-gradient-to-tr from-blue-600 to-indigo-600 flex items-center justify-center text-white shadow-md cursor-pointer hover:opacity-90 shrink-0" 
+              className="w-10 h-10 rounded-xl bg-gradient-to-tr from-blue-600 to-indigo-600 flex items-center justify-center text-white shadow-md cursor-pointer hover:opacity-90 shrink-0 overflow-hidden" 
               onClick={() => setActiveTab('settings')} 
-              title="Edit Profile & Settings"
+              title="Edit Profile & Settings (Click to change logo icon)"
             >
-              <FolderLock size={20} />
+              {logoIcon.startsWith('data:image/') ? (
+                <img src={logoIcon} alt="Logo" className="w-full h-full object-cover" />
+              ) : logoIcon === 'Shield' ? (
+                <Shield size={20} />
+              ) : logoIcon === 'BookOpen' ? (
+                <BookOpen size={20} />
+              ) : logoIcon === 'Users' ? (
+                <Users size={20} />
+              ) : logoIcon === 'Award' ? (
+                <Award size={20} />
+              ) : logoIcon === 'Star' ? (
+                <Star size={20} />
+              ) : logoIcon === 'Heart' ? (
+                <Heart size={20} />
+              ) : logoIcon === 'Zap' ? (
+                <Zap size={20} />
+              ) : logoIcon === 'Building2' ? (
+                <Building2 size={20} />
+              ) : logoIcon === 'Scale' ? (
+                <Scale size={20} />
+              ) : logoIcon === 'Briefcase' ? (
+                <Briefcase size={20} />
+              ) : logoIcon === 'GraduationCap' ? (
+                <GraduationCap size={20} />
+              ) : (
+                <FolderLock size={20} />
+              )}
             </div>
             <div>
               <h1 className="text-sm font-black tracking-tight text-gray-900 sm:text-lg flex items-center gap-1.5 leading-none">
                 <span>{sheetName}</span>
                 <span className="text-[10px] bg-slate-100 border border-slate-200 text-slate-700 font-bold px-2 py-0.5 rounded-md uppercase font-mono hidden sm:inline-block">
                   {academicYear}
-                </span>
-                <span className="text-[10px] bg-emerald-50 border border-emerald-200 text-emerald-700 font-bold px-2 py-0.5 rounded-md uppercase font-mono">
-                  v3
                 </span>
                 <button
                   onClick={() => setActiveTab('settings')}
@@ -1314,48 +1355,163 @@ export default function App() {
         
         {/* Help Panel */}
         {isHelpOpen && (
-          <div className="bg-white border border-blue-100 rounded-2xl p-6 shadow-sm animate-fade-in text-left">
-            <h3 className="font-extrabold text-gray-900 border-b border-gray-100 pb-3 flex items-center gap-2">
-              <Sparkles size={18} className="text-blue-500" />
-              Accounting 101 for Union Treasurers & Secretaries
-            </h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 pt-4 text-xs text-gray-600 leading-relaxed">
-              <div className="space-y-2">
-                <h4 className="font-bold text-gray-800 text-sm">Double-Entry Ledger Integrity</h4>
-                <p>
-                  Every financial transaction must balance. In our automated union sheets, you select a <strong>Debit Dr</strong> account (destination of funds) and a <strong>Credit Cr</strong> account (source of funds).
-                </p>
-                <p>
-                  For example: Collecting Fees boosts the <strong>Bank</strong> (Debit Asset) and represents <strong>Membership Fees</strong> (Credit Income).
-                </p>
-              </div>
-
-              <div className="space-y-2">
-                <h4 className="font-bold text-gray-800 text-sm">The 4 Core Financial Automated Statements</h4>
-                <p>
-                  • <strong>General Ledger:</strong> Individual listing of transaction items tied to specific names, showing details and running asset/liability balance curves.
-                </p>
-                <p>
-                  • <strong>Trial Balance:</strong> Master audit checking if all Debit balances match Credit balances. If this balances, the union transaction accounting is flawless.
-                </p>
-              </div>
-
-              <div className="space-y-2">
-                <h4 className="font-bold text-gray-800 text-sm">How Cash Summary & Balance Sheets sync</h4>
-                <p>
-                  The **Receipts & Payments Account** summarizes physical inflows & outflows. Its closing balance is your immediate Cash on Hand.
-                </p>
-                <p>
-                  The **Balance Sheet** organizes Capital Fund reserves on LHS, keeping check of overall financial solvency. The net cash is matched directly to your asset ledger.
-                </p>
-              </div>
+          <div className="bg-white border border-blue-100 rounded-2xl p-6 shadow-sm animate-fade-in text-left space-y-6">
+            <div className="border-b border-gray-100 pb-4">
+              <h3 className="font-extrabold text-gray-900 text-lg flex items-center gap-2">
+                <Sparkles size={20} className="text-blue-500 shrink-0" />
+                Student Union Financial App Guide (Simply Explained)
+              </h3>
+              <p className="text-xs text-gray-500 mt-1">
+                A simple, jargon-free handbook to help you master every single feature of your Student Union ledger!
+              </p>
             </div>
-            <button
-              onClick={() => setIsHelpOpen(false)}
-              className="mt-5 px-3.5 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-700 text-xs font-bold rounded-lg transition-colors border border-blue-150"
-            >
-              Dismiss Guide
-            </button>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 text-xs text-gray-600 leading-relaxed">
+              
+              {/* Box 1 */}
+              <div className="space-y-2 bg-slate-50/50 p-4 rounded-xl border border-slate-100">
+                <div className="font-bold text-slate-800 text-sm flex items-center gap-1.5">
+                  <span className="w-5 h-5 rounded-md bg-indigo-100 text-indigo-700 flex items-center justify-center text-[11px] font-mono">1</span>
+                  Daily Ledger Entries
+                </div>
+                <p className="text-[11px]">
+                  Think of this as your <strong>financial diary</strong>. Every time the Union receives or spends money, you write it down here.
+                </p>
+                <div className="mt-2 pt-2 border-t border-slate-200/60 space-y-1 text-[11px]">
+                  <p>• <strong className="text-indigo-600">Debit (Dr):</strong> Where the money is going <strong>TO</strong> (e.g., your Bank account or buying laptops).</p>
+                  <p>• <strong className="text-emerald-600">Credit (Cr):</strong> Where the money came <strong>FROM</strong> (e.g., student dues or donations).</p>
+                </div>
+              </div>
+
+              {/* Box 2 */}
+              <div className="space-y-2 bg-slate-50/50 p-4 rounded-xl border border-slate-100">
+                <div className="font-bold text-slate-800 text-sm flex items-center gap-1.5">
+                  <span className="w-5 h-5 rounded-md bg-indigo-100 text-indigo-700 flex items-center justify-center text-[11px] font-mono">2</span>
+                  Student Dues & Records
+                </div>
+                <p className="text-[11px]">
+                  A smart digital <strong>attendance and payment checklist</strong> for all students.
+                </p>
+                <div className="mt-2 pt-2 border-t border-slate-200/60 space-y-1 text-[11px]">
+                  <p>• See a list of all students and their custom details.</p>
+                  <p>• Instantly track who has paid and who still owes money.</p>
+                  <p>• Register a new student in one click with automated balance math.</p>
+                </div>
+              </div>
+
+              {/* Box 3 */}
+              <div className="space-y-2 bg-slate-50/50 p-4 rounded-xl border border-slate-100">
+                <div className="font-bold text-slate-800 text-sm flex items-center gap-1.5">
+                  <span className="w-5 h-5 rounded-md bg-indigo-100 text-indigo-700 flex items-center justify-center text-[11px] font-mono">3</span>
+                  Ledger Folders
+                </div>
+                <p className="text-[11px]">
+                  Individual <strong>category filing cabinets</strong> (such as Bank, Cash, Office Expenses, or Sports Event).
+                </p>
+                <div className="mt-2 pt-2 border-t border-slate-200/60 space-y-1 text-[11px]">
+                  <p>• Groups all transactions of the same category in one clean file.</p>
+                  <p>• Displays an interactive running balance timeline.</p>
+                  <p>• Shows exactly how individual categories grew or shrank.</p>
+                </div>
+              </div>
+
+              {/* Box 4 */}
+              <div className="space-y-2 bg-slate-50/50 p-4 rounded-xl border border-slate-100">
+                <div className="font-bold text-slate-800 text-sm flex items-center gap-1.5">
+                  <span className="w-5 h-5 rounded-md bg-indigo-100 text-indigo-700 flex items-center justify-center text-[11px] font-mono">4</span>
+                  Trial Balance Audit
+                </div>
+                <p className="text-[11px]">
+                  Our automated <strong>balance scale helper</strong> to catch any human mistakes.
+                </p>
+                <div className="mt-2 pt-2 border-t border-slate-200/60 space-y-1 text-[11px]">
+                  <p>• Lists every category's incoming and outgoing balances.</p>
+                  <p>• Checks if both sides match up perfectly.</p>
+                  <p>• If the final difference is exactly <strong>zero</strong>, your book records are 100% flawless!</p>
+                </div>
+              </div>
+
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 text-xs text-gray-600 leading-relaxed pt-2">
+
+              {/* Box 5 */}
+              <div className="space-y-2 bg-slate-50/50 p-4 rounded-xl border border-slate-100">
+                <div className="font-bold text-slate-800 text-sm flex items-center gap-1.5">
+                  <span className="w-5 h-5 rounded-md bg-indigo-100 text-indigo-700 flex items-center justify-center text-[11px] font-mono">5</span>
+                  Receipts & Payments
+                </div>
+                <p className="text-[11px]">
+                  A clear, physical <strong>cash register check</strong>.
+                </p>
+                <div className="mt-2 pt-2 border-t border-slate-200/60 space-y-1 text-[11px]">
+                  <p>• Lists actual physical cash or bank deposits in one place.</p>
+                  <p>• Tracks total actual money going in and out.</p>
+                  <p>• The final bottom line shows your exact hand-held money.</p>
+                </div>
+              </div>
+
+              {/* Box 6 */}
+              <div className="space-y-2 bg-slate-50/50 p-4 rounded-xl border border-slate-100">
+                <div className="font-bold text-slate-800 text-sm flex items-center gap-1.5">
+                  <span className="w-5 h-5 rounded-md bg-indigo-100 text-indigo-700 flex items-center justify-center text-[11px] font-mono">6</span>
+                  Income & Expenditure
+                </div>
+                <p className="text-[11px]">
+                  Tells you if your Union is <strong>spending smart</strong> or overspending.
+                </p>
+                <div className="mt-2 pt-2 border-t border-slate-200/60 space-y-1 text-[11px]">
+                  <p>• Compares yearly income with your actual expenses.</p>
+                  <p>• <strong>Surplus:</strong> You saved money for the future!</p>
+                  <p>• <strong>Deficit:</strong> You spent more than you collected.</p>
+                </div>
+              </div>
+
+              {/* Box 7 */}
+              <div className="space-y-2 bg-slate-50/50 p-4 rounded-xl border border-slate-100">
+                <div className="font-bold text-slate-800 text-sm flex items-center gap-1.5">
+                  <span className="w-5 h-5 rounded-md bg-indigo-100 text-indigo-700 flex items-center justify-center text-[11px] font-mono">7</span>
+                  Balance Sheet
+                </div>
+                <p className="text-[11px]">
+                  The ultimate <strong>financial health checkup</strong>.
+                </p>
+                <div className="mt-2 pt-2 border-t border-slate-200/60 space-y-1 text-[11px]">
+                  <p>• Left Side (LHS) lists your Capital Reserve Funds.</p>
+                  <p>• Right Side (RHS) lists everything you own (Bank, Cash, Equipment).</p>
+                  <p>• Both sides match to prove your overall solvency.</p>
+                </div>
+              </div>
+
+              {/* Box 8 */}
+              <div className="space-y-2 bg-slate-50/50 p-4 rounded-xl border border-slate-100">
+                <div className="font-bold text-slate-800 text-sm flex items-center gap-1.5">
+                  <span className="w-5 h-5 rounded-md bg-indigo-100 text-indigo-700 flex items-center justify-center text-[11px] font-mono">8</span>
+                  Visual Performance
+                </div>
+                <p className="text-[11px]">
+                  Turns boring, dry tables and math into <strong>easy-to-read charts</strong>.
+                </p>
+                <div className="mt-2 pt-2 border-t border-slate-200/60 space-y-1 text-[11px]">
+                  <p>• Doughnut Charts show your exact expense percentages.</p>
+                  <p>• Monthly Trends trace when you saved or spent the most.</p>
+                  <p>• Easily identify outliers and plan future budgets.</p>
+                </div>
+              </div>
+
+            </div>
+
+            <div className="flex items-center justify-between border-t border-gray-100 pt-4">
+              <p className="text-[10px] text-gray-400 font-medium">
+                💡 Every screen does the heavy math automatically in the background, keeping your union sheets flawless.
+              </p>
+              <button
+                onClick={() => setIsHelpOpen(false)}
+                className="px-4 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-700 text-xs font-bold rounded-lg transition-all border border-blue-200 cursor-pointer shadow-3xs"
+              >
+                Dismiss Guide
+              </button>
+            </div>
           </div>
         )}
 
@@ -1369,8 +1525,8 @@ export default function App() {
           />
         )}
 
-        {/* Tabs navigation list */}
-        <div className="bg-white border border-gray-200 rounded-xl p-1.5 flex overflow-x-auto gap-1 shadow-3xs sticky top-16 sm:top-20 z-30 whitespace-nowrap [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden scroll-smooth">
+        {/* Tabs navigation list (Desktop View Only) */}
+        <div className="hidden md:flex bg-white border border-gray-200 rounded-xl p-1.5 overflow-x-auto gap-1 shadow-3xs sticky top-16 sm:top-20 z-30 whitespace-nowrap [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden scroll-smooth">
           {[
             { id: 'journal', label: 'Journal Spreadsheet', icon: FileText, color: 'text-indigo-600' },
             { id: 'ledgers', label: 'General Ledger', icon: BookOpen, color: 'text-blue-600' },
@@ -1378,7 +1534,6 @@ export default function App() {
             { id: 'receipts', label: 'Receipts & Payments', icon: RefreshCw, color: 'text-emerald-600' },
             { id: 'expenditure', label: 'Income & Expenditure', icon: TrendingUp, color: 'text-indigo-500' },
             { id: 'balance', label: 'Balance Sheet', icon: Scale, color: 'text-teal-600' },
-            { id: 'chart', label: 'Chart of Accounts', icon: List, color: 'text-blue-500' },
           ].map((tab) => {
             const Icon = tab.icon;
             const isActive = activeTab === tab.id;
@@ -1486,16 +1641,6 @@ export default function App() {
             />
           )}
 
-          {activeTab === 'chart' && (
-            <ChartOfAccounts
-              accounts={accounts}
-              isEditor={isEditor}
-              onAddAccount={handleAddAccount}
-              onEditAccount={handleEditAccount}
-              onDeleteAccount={handleDeleteAccount}
-            />
-          )}
-
           {activeTab === 'settings' && (
             <SettingsView
               accounts={accounts}
@@ -1505,6 +1650,7 @@ export default function App() {
               treasurerName={treasurerName}
               treasurerEmail={treasurerEmail}
               academicYear={academicYear}
+              logoIcon={logoIcon}
               allowedEmails={allowedEmails}
               isEditor={isEditor}
               currentUser={currentUser}
@@ -1512,6 +1658,9 @@ export default function App() {
               onLoadPresets={onLoadPresets}
               onClearAll={onClearAll}
               onImportBackup={onImportBackup}
+              onAddAccount={handleAddAccount}
+              onEditAccount={handleEditAccount}
+              onDeleteAccount={handleDeleteAccount}
             />
           )}
         </div>
@@ -1590,6 +1739,132 @@ export default function App() {
           >
             <X size={12} className="opacity-60 hover:opacity-100" />
           </button>
+        </div>
+      )}
+
+      {/* 📱 Premium Android Chrome Bottom Navigation Bar (Reachability First) */}
+      <div className="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-slate-200 z-50 py-1.5 px-2 flex justify-around items-center shadow-[0_-4px_16px_rgba(0,0,0,0.06)] backdrop-blur-md">
+        <button
+          onClick={() => {
+            setActiveTab('journal');
+            setIsReportsMobileMenuOpen(false);
+          }}
+          className={`flex-1 flex flex-col items-center justify-center py-1 rounded-xl transition-all cursor-pointer ${
+            activeTab === 'journal' ? 'text-indigo-600 font-extrabold scale-95' : 'text-slate-400'
+          }`}
+        >
+          <FileText size={20} className={activeTab === 'journal' ? 'text-indigo-600 animate-pulse' : 'text-slate-400'} />
+          <span className="text-[10px] mt-1 font-sans">Journal</span>
+        </button>
+
+        <button
+          onClick={() => {
+            setActiveTab('ledgers');
+            setIsReportsMobileMenuOpen(false);
+          }}
+          className={`flex-1 flex flex-col items-center justify-center py-1 rounded-xl transition-all cursor-pointer ${
+            activeTab === 'ledgers' ? 'text-indigo-600 font-extrabold scale-95' : 'text-slate-400'
+          }`}
+        >
+          <BookOpen size={20} className={activeTab === 'ledgers' ? 'text-indigo-600 animate-pulse' : 'text-slate-400'} />
+          <span className="text-[10px] mt-1 font-sans">Ledgers</span>
+        </button>
+
+        <button
+          onClick={() => {
+            setActiveTab('dues');
+            setIsReportsMobileMenuOpen(false);
+          }}
+          className={`flex-1 flex flex-col items-center justify-center py-1 rounded-xl transition-all cursor-pointer ${
+            activeTab === 'dues' ? 'text-indigo-600 font-extrabold scale-95' : 'text-slate-400'
+          }`}
+        >
+          <UsersIcon size={20} className={activeTab === 'dues' ? 'text-indigo-600 animate-pulse' : 'text-slate-400'} />
+          <span className="text-[10px] mt-1 font-sans">Student Dues</span>
+        </button>
+
+        <button
+          onClick={() => setIsReportsMobileMenuOpen(true)}
+          className={`flex-1 flex flex-col items-center justify-center py-1 rounded-xl transition-all cursor-pointer ${
+            ['trial', 'receipts', 'expenditure', 'balance', 'chart'].includes(activeTab) && !isReportsMobileMenuOpen
+              ? 'text-indigo-600 font-extrabold scale-95'
+              : 'text-slate-400'
+          }`}
+        >
+          <TrendingUp size={20} className={['trial', 'receipts', 'expenditure', 'balance', 'chart'].includes(activeTab) ? 'text-indigo-600' : 'text-slate-400'} />
+          <span className="text-[10px] mt-1 font-sans">Statements</span>
+        </button>
+
+        <button
+          onClick={() => {
+            setActiveTab('settings');
+            setIsReportsMobileMenuOpen(false);
+          }}
+          className={`flex-1 flex flex-col items-center justify-center py-1 rounded-xl transition-all cursor-pointer ${
+            activeTab === 'settings' ? 'text-indigo-600 font-extrabold scale-95' : 'text-slate-400'
+          }`}
+        >
+          <Settings size={20} className={activeTab === 'settings' ? 'text-indigo-600 animate-pulse' : 'text-slate-400'} />
+          <span className="text-[10px] mt-1 font-sans">Settings</span>
+        </button>
+      </div>
+
+      {/* 📊 Premium Mobile Sheets & Reports Choice Bottom Overlay Menu */}
+      {isReportsMobileMenuOpen && (
+        <div className="md:hidden fixed inset-0 z-[150] bg-slate-900/40 backdrop-blur-xs flex items-end animate-in fade-in duration-200">
+          <div 
+            className="w-full bg-white rounded-t-2xl shadow-xl max-h-[85vh] overflow-y-auto animate-in slide-in-from-bottom-20 duration-300 flex flex-col p-5 space-y-4"
+            style={{ paddingBottom: 'calc(env(safe-area-inset-bottom) + 24px)' }}
+          >
+            <div className="flex justify-between items-center border-b border-slate-100 pb-3">
+              <div>
+                <h3 className="text-sm font-black text-slate-900">Statements & Audits</h3>
+                <p className="text-[10px] text-slate-400">Tap to instantly generate the target report sheet</p>
+              </div>
+              <button
+                onClick={() => setIsReportsMobileMenuOpen(false)}
+                className="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-505 flex items-center justify-center cursor-pointer"
+              >
+                <X size={15} />
+              </button>
+            </div>
+
+            <div className="space-y-2">
+              {[
+                { id: 'trial', label: 'Trial Balance Sheet', desc: 'Debits matching credits trial check', icon: Wallet, color: 'bg-orange-50 text-orange-600 border-orange-100' },
+                { id: 'receipts', label: 'Receipts & Payments Account', desc: 'Summary of actual physical cash flow', icon: RefreshCw, color: 'bg-emerald-50 text-emerald-600 border-emerald-100' },
+                { id: 'expenditure', label: 'Income & Expenditure', desc: 'Surplus or deficit operational check', icon: TrendingUp, color: 'bg-indigo-50 text-indigo-600 border-indigo-100' },
+                { id: 'balance', label: 'Class Balance Sheet', desc: 'Capital reserves vs outstanding assets', icon: Scale, color: 'bg-teal-50 text-teal-600 border-teal-100' },
+              ].map((rep) => {
+                const Icon = rep.icon;
+                const isCurrent = activeTab === rep.id;
+                return (
+                  <button
+                    key={rep.id}
+                    onClick={() => {
+                      setActiveTab(rep.id as any);
+                      setIsReportsMobileMenuOpen(false);
+                    }}
+                    className={`w-full min-h-[52px] p-3 border rounded-xl flex items-center gap-3.5 text-left transition-all cursor-pointer ${
+                      isCurrent 
+                        ? 'border-indigo-600 bg-indigo-50/40 text-indigo-900 ring-2 ring-indigo-500/10' 
+                        : 'border-slate-150 bg-white text-slate-700 hover:bg-slate-50'
+                    }`}
+                  >
+                    <div className={`w-9 h-9 rounded-lg flex items-center justify-center shrink-0 border ${rep.color}`}>
+                      <Icon size={16} />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className={`text-xs ${isCurrent ? 'font-extrabold text-indigo-950' : 'font-bold text-slate-800'}`}>
+                        {rep.label}
+                      </div>
+                      <div className="text-[10px] text-slate-400 truncate mt-0.5">{rep.desc}</div>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
         </div>
       )}
     </div>

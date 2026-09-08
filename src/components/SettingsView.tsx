@@ -4,12 +4,12 @@
  */
 
 import React, { useState, useEffect, useRef } from 'react';
-import { Account, JournalEntry } from '../types';
+import { Account, JournalEntry, AccountType } from '../types';
+import { ChartOfAccounts } from './ChartOfAccounts';
 import { 
   Settings, 
   Database, 
   Download, 
-  Upload, 
   Trash2, 
   RefreshCw, 
   Building, 
@@ -22,7 +22,21 @@ import {
   ShieldAlert, 
   Info,
   Clock,
-  Plus
+  Plus,
+  Shield,
+  BookOpen,
+  Users,
+  Award,
+  Star,
+  Heart,
+  Zap,
+  Building2,
+  Scale,
+  Briefcase,
+  GraduationCap,
+  FolderLock,
+  Image,
+  Upload
 } from 'lucide-react';
 
 interface SettingsViewProps {
@@ -34,6 +48,7 @@ interface SettingsViewProps {
   treasurerName: string;
   treasurerEmail: string;
   academicYear: string;
+  logoIcon: string;
   allowedEmails: string[];
   isEditor: boolean;
   currentUser: any | null;
@@ -45,11 +60,15 @@ interface SettingsViewProps {
     treasurerEmail: string;
     academicYear: string;
     allowedEmails: string[];
+    logoIcon: string;
   }) => Promise<void>;
   
   onLoadPresets: () => Promise<void>;
   onClearAll: () => Promise<void>;
   onImportBackup: (data: string) => Promise<boolean>;
+  onAddAccount: (account: Omit<Account, 'id'>) => void;
+  onEditAccount: (id: string, newName: string, newType: AccountType) => void;
+  onDeleteAccount: (id: string) => void;
 }
 
 export function SettingsView({
@@ -60,6 +79,7 @@ export function SettingsView({
   treasurerName,
   treasurerEmail,
   academicYear,
+  logoIcon,
   allowedEmails = ['klrmuhsin809@gmail.com', 'yoonuschr@gmail.com'],
   isEditor,
   currentUser,
@@ -67,6 +87,9 @@ export function SettingsView({
   onLoadPresets,
   onClearAll,
   onImportBackup,
+  onAddAccount,
+  onEditAccount,
+  onDeleteAccount,
 }: SettingsViewProps) {
   // Local state for the config form inputs
   const [tempSheetName, setTempSheetName] = useState(sheetName);
@@ -74,6 +97,7 @@ export function SettingsView({
   const [tempTreasurerName, setTempTreasurerName] = useState(treasurerName);
   const [tempTreasurerEmail, setTempTreasurerEmail] = useState(treasurerEmail);
   const [tempAcademicYear, setTempAcademicYear] = useState(academicYear);
+  const [tempLogoIcon, setTempLogoIcon] = useState(logoIcon);
 
   // Local state for dynamic whitelisted editor emails
   const [whitelistedEmails, setWhitelistedEmails] = useState<string[]>([]);
@@ -87,6 +111,7 @@ export function SettingsView({
   const [importStatus, setImportStatus] = useState<{ success?: boolean; text?: string } | null>(null);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const galleryInputRef = useRef<HTMLInputElement>(null);
 
   // Sync state if prop changes (e.g., initial load from DB finishes)
   useEffect(() => {
@@ -95,6 +120,7 @@ export function SettingsView({
     setTempTreasurerName(treasurerName);
     setTempTreasurerEmail(treasurerEmail);
     setTempAcademicYear(academicYear);
+    setTempLogoIcon(logoIcon);
     
     // Ensure klrmuhsin809@gmail.com and yoonuschr@gmail.com are always included and are at the top
     const unique: string[] = Array.from(new Set<string>(
@@ -105,7 +131,21 @@ export function SettingsView({
     const mandatory = ['klrmuhsin809@gmail.com', 'yoonuschr@gmail.com'];
     const other = unique.filter(e => !mandatory.includes(e));
     setWhitelistedEmails([...mandatory, ...other]);
-  }, [sheetName, sheetTagline, treasurerName, treasurerEmail, academicYear, allowedEmails]);
+  }, [sheetName, sheetTagline, treasurerName, treasurerEmail, academicYear, logoIcon, allowedEmails]);
+
+  const handleGalleryUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        const result = event.target?.result as string;
+        if (result) {
+          setTempLogoIcon(result);
+        }
+      };
+      reader.readAsDataURL(file);
+    }
+  };
 
   // Handler to add a new slot (email input field)
   const handleAddEmailSlot = () => {
@@ -153,7 +193,8 @@ export function SettingsView({
         treasurerName: tempTreasurerName,
         treasurerEmail: tempTreasurerEmail,
         academicYear: tempAcademicYear,
-        allowedEmails: finalEmails
+        allowedEmails: finalEmails,
+        logoIcon: tempLogoIcon
       });
       setSaveSuccess(true);
       setTimeout(() => setSaveSuccess(false), 4000);
@@ -350,6 +391,108 @@ export function SettingsView({
                       onChange={(e) => setTempAcademicYear(e.target.value)}
                       className="w-full pl-8 pr-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 focus:outline-none font-mono font-bold text-slate-800 transition-all"
                     />
+                  </div>
+                </div>
+
+                {/* Custom Logo Icon & Gallery Photo Customizer */}
+                <div className="md:col-span-2 pt-2 border-t border-gray-100">
+                  <label className="block text-[11px] font-bold text-gray-600 uppercase tracking-wider mb-2 font-mono flex items-center justify-between">
+                    <span>App Profile Icon / Gallery Photo Customizer</span>
+                    <span className="text-[10px] text-indigo-600 font-normal">Choose preset icon or upload photo</span>
+                  </label>
+
+                  <div className="flex flex-col sm:flex-row items-center gap-4 bg-slate-50 p-4 rounded-xl border border-gray-200">
+                    <div className="w-14 h-14 rounded-xl bg-gradient-to-tr from-blue-600 to-indigo-600 flex items-center justify-center text-white shadow-md overflow-hidden shrink-0">
+                      {tempLogoIcon.startsWith('data:image/') ? (
+                        <img src={tempLogoIcon} alt="Custom Logo" className="w-full h-full object-cover" />
+                      ) : tempLogoIcon === 'Shield' ? (
+                        <Shield size={26} />
+                      ) : tempLogoIcon === 'BookOpen' ? (
+                        <BookOpen size={26} />
+                      ) : tempLogoIcon === 'Users' ? (
+                        <Users size={26} />
+                      ) : tempLogoIcon === 'Award' ? (
+                        <Award size={26} />
+                      ) : tempLogoIcon === 'Star' ? (
+                        <Star size={26} />
+                      ) : tempLogoIcon === 'Heart' ? (
+                        <Heart size={26} />
+                      ) : tempLogoIcon === 'Zap' ? (
+                        <Zap size={26} />
+                      ) : tempLogoIcon === 'Building2' ? (
+                        <Building2 size={26} />
+                      ) : tempLogoIcon === 'Scale' ? (
+                        <Scale size={26} />
+                      ) : tempLogoIcon === 'Briefcase' ? (
+                        <Briefcase size={26} />
+                      ) : tempLogoIcon === 'GraduationCap' ? (
+                        <GraduationCap size={26} />
+                      ) : (
+                        <FolderLock size={26} />
+                      )}
+                    </div>
+
+                    <div className="flex-1 space-y-2 w-full">
+                      <div className="flex flex-wrap gap-2">
+                        {[
+                          { id: 'FolderLock', label: 'Lock', icon: FolderLock },
+                          { id: 'Shield', label: 'Shield', icon: Shield },
+                          { id: 'BookOpen', label: 'Book', icon: BookOpen },
+                          { id: 'Users', label: 'Users', icon: Users },
+                          { id: 'Award', label: 'Award', icon: Award },
+                          { id: 'Star', label: 'Star', icon: Star },
+                          { id: 'Heart', label: 'Heart', icon: Heart },
+                          { id: 'Zap', label: 'Zap', icon: Zap },
+                          { id: 'Building2', label: 'Building', icon: Building2 },
+                          { id: 'Scale', label: 'Scale', icon: Scale },
+                          { id: 'Briefcase', label: 'Briefcase', icon: Briefcase },
+                          { id: 'GraduationCap', label: 'Graduation', icon: GraduationCap },
+                        ].map((item) => {
+                          const IconComp = item.icon;
+                          const isSelected = tempLogoIcon === item.id;
+                          return (
+                            <button
+                              key={item.id}
+                              type="button"
+                              onClick={() => setTempLogoIcon(item.id)}
+                              className={`p-2 rounded-lg border transition-all flex items-center justify-center cursor-pointer ${
+                                isSelected ? 'bg-indigo-600 text-white border-indigo-600 shadow-xs' : 'bg-white text-gray-700 border-gray-200 hover:bg-gray-100'
+                              }`}
+                              title={item.label}
+                            >
+                              <IconComp size={16} />
+                            </button>
+                          );
+                        })}
+                      </div>
+
+                      <div className="pt-1 flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => galleryInputRef.current?.click()}
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white hover:bg-gray-50 text-gray-700 border border-gray-300 rounded-lg text-xs font-medium transition-all cursor-pointer shadow-3xs"
+                        >
+                          <Upload size={14} className="text-indigo-600" />
+                          <span>Upload from Gallery / Device</span>
+                        </button>
+                        {tempLogoIcon.startsWith('data:image/') && (
+                          <button
+                            type="button"
+                            onClick={() => setTempLogoIcon('FolderLock')}
+                            className="text-xs text-rose-600 hover:text-rose-700 font-medium px-2 py-1 cursor-pointer"
+                          >
+                            Remove custom photo
+                          </button>
+                        )}
+                        <input
+                          ref={galleryInputRef}
+                          type="file"
+                          accept="image/*"
+                          onChange={handleGalleryUpload}
+                          className="hidden"
+                        />
+                      </div>
+                    </div>
                   </div>
                 </div>
 
@@ -565,6 +708,24 @@ export function SettingsView({
 
             </div>
           </div>
+
+          {/* Section 3: Chart of Accounts */}
+          <div className="bg-white border border-gray-200 rounded-2xl shadow-3xs overflow-hidden">
+            <div className="p-5 border-b border-gray-100 bg-slate-50/50">
+              <h3 className="text-sm font-bold text-gray-900">Chart of Accounts Mapping</h3>
+              <p className="text-[11px] text-gray-500 mt-0.5">Manage and configure your custom double-entry account categories and ledger groups</p>
+            </div>
+            <div className="p-5">
+              <ChartOfAccounts
+                accounts={accounts}
+                isEditor={isEditor}
+                onAddAccount={onAddAccount}
+                onEditAccount={onEditAccount}
+                onDeleteAccount={onDeleteAccount}
+              />
+            </div>
+          </div>
+
         </div>
 
         {/* COL 3: Telemetry Stats & Dangerous Actions */}

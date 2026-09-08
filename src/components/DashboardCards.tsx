@@ -112,7 +112,7 @@ export function DashboardCards({ accounts, entries, onDuesClick, activeTab }: Da
               key={idx}
               id={`dashboard-card-${idx}`}
               onClick={(card as any).onClick}
-              className={`p-4 rounded-xl border ${card.color} transition-all flex items-center justify-between text-left cursor-pointer hover:scale-[1.02] active:scale-[0.98]`}
+              className={`p-4 rounded-xl border ${card.color} transition-all ${idx === 5 ? 'hidden md:flex' : 'flex'} items-center justify-between text-left cursor-pointer hover:scale-[1.02] active:scale-[0.98]`}
               type="button"
             >
               <div>
