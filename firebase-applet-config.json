@@ -1,12 +1,12 @@
 {
-  "projectId": "phrasal-cascade-7sx2c",
-  "appId": "1:972340928564:web:1c9126be2ff488d44baa61",
-  "apiKey": "AIzaSyDXeqP56w3Q5Bn1hsiQlWtSlrrxMgr-YN4",
-  "authDomain": "phrasal-cascade-7sx2c.firebaseapp.com",
-  "firestoreDatabaseId": "ai-studio-remixuniontransa-39450d18-75a9-41f7-8807-300ac1eb33b4",
-  "storageBucket": "phrasal-cascade-7sx2c.firebasestorage.app",
-  "messagingSenderId": "972340928564",
-  "measurementId": "",
-  "oAuthClientId": "972340928564-qsgbums55a3itjognj5i6294qd9vurre.apps.googleusercontent.com",
+  "projectId": "nada-union-ledger",
+  "appId": "1:401778428987:web:38a63598accb7ebe4de01e",
+  "apiKey": "AIzaSyDaNsXZjzUDGXgWpuF72Mqa5uDdIzJ4GIE",
+  "authDomain": "nada-union-ledger.firebaseapp.com",
+  "firestoreDatabaseId": "",
+  "storageBucket": "nada-union-ledger.firebasestorage.app",
+  "messagingSenderId": "401778428987",
+  "measurementId": "G-S338YH9F2S",
+  "oAuthClientId": "",
   "recaptchaSiteKey": ""
 }
