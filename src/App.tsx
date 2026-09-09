@@ -174,7 +174,7 @@ export default function App() {
 
   const [activeTab, setActiveTab] = useState<'home' | 'journal' | 'ledgers' | 'trial' | 'receipts' | 'expenditure' | 'balance' | 'chart' | 'dues' | 'settings'>('home');
   const [isAppSidebarOpen, setIsAppSidebarOpen] = useState(false);
-  const [isSidebarProfileFolderOpen, setIsSidebarProfileFolderOpen] = useState(true);
+  const [isSidebarProfileFolderOpen, setIsSidebarProfileFolderOpen] = useState(false);
   const [isSidebarTemplatesOpen, setIsSidebarTemplatesOpen] = useState(false);
   const [isReportsMobileMenuOpen, setIsReportsMobileMenuOpen] = useState(false);
   const [isHelpOpen, setIsHelpOpen] = useState(false);
@@ -1346,8 +1346,11 @@ export default function App() {
             </button>
             <div 
               className="w-10 h-10 rounded-xl bg-gradient-to-tr from-blue-600 to-indigo-600 flex items-center justify-center text-white shadow-md cursor-pointer hover:opacity-90 shrink-0 overflow-hidden" 
-              onClick={() => setActiveTab('settings')} 
-              title="Edit Profile & Settings (Click to change logo icon)"
+              onClick={() => {
+                setIsSidebarProfileFolderOpen(true);
+                setIsAppSidebarOpen(true);
+              }} 
+              title="Profile Button (Click to view and edit profile)"
             >
               {logoIcon.startsWith('data:image/') ? (
                 <img src={logoIcon} alt="Logo" className="w-full h-full object-cover" />
@@ -1384,9 +1387,12 @@ export default function App() {
                   {academicYear}
                 </span>
                 <button
-                  onClick={() => setActiveTab('settings')}
+                  onClick={() => {
+                    setIsSidebarProfileFolderOpen(true);
+                    setIsAppSidebarOpen(true);
+                  }}
                   className="p-1 hover:bg-slate-100 text-gray-400 hover:text-indigo-600 rounded cursor-pointer transition-colors"
-                  title="Edit Sheet Title & Profile"
+                  title="Profile Button (Click to view and edit profile)"
                 >
                   <Edit size={13} />
                 </button>
@@ -2135,31 +2141,45 @@ export default function App() {
             </div>
 
             <div className="flex-1 overflow-y-auto p-3 space-y-3">
-              {/* Folder 1: Profile (Settings & Institutional Identity) */}
-              <div className="border border-slate-200 rounded-xl overflow-hidden bg-white shadow-3xs">
+              {/* Folder 1: Profile Button (Holds all Profile content inside) */}
+              <div className="border border-slate-200 rounded-xl overflow-hidden bg-white shadow-3xs transition-all">
                 <button
                   type="button"
+                  id="profile-sidebar-button"
                   onClick={() => setIsSidebarProfileFolderOpen(!isSidebarProfileFolderOpen)}
-                  className="w-full flex items-center justify-between p-3 hover:bg-gray-50 transition-colors text-left cursor-pointer bg-slate-50/70"
+                  className={`w-full flex items-center justify-between p-3.5 text-left cursor-pointer transition-colors ${
+                    isSidebarProfileFolderOpen 
+                      ? 'bg-indigo-50/80 border-b border-indigo-100' 
+                      : 'bg-slate-50/60 hover:bg-slate-100/80'
+                  }`}
                 >
-                  <div className="flex items-center gap-2.5 text-gray-800 font-bold text-xs">
-                    <UserIcon size={16} className="text-indigo-600" />
-                    <span>Profile</span>
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div className="w-8 h-8 rounded-lg bg-indigo-600 text-white flex items-center justify-center shadow-xs shrink-0">
+                      <UserIcon size={16} />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs font-bold text-gray-900">Profile</span>
+                      </div>
+                      <p className="text-[10px] text-gray-500 truncate mt-0.5">
+                        {isSidebarProfileFolderOpen ? 'Click to hide profile content' : 'Click to show all profile content'}
+                      </p>
+                    </div>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <span className="text-[10px] font-semibold text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded-full border border-indigo-100/80">
-                      Settings
+                  <div className="flex items-center gap-1.5 ml-2 shrink-0">
+                    <span className="text-[10px] font-semibold text-gray-400 hidden sm:inline">
+                      {isSidebarProfileFolderOpen ? 'Hide' : 'Show'}
                     </span>
-                    {isSidebarProfileFolderOpen ? (
-                      <ChevronDown size={15} className="text-gray-400" />
-                    ) : (
-                      <ChevronRight size={15} className="text-gray-400" />
-                    )}
+                    <div className={`p-1 rounded-md transition-transform duration-200 ${
+                      isSidebarProfileFolderOpen ? 'bg-indigo-100 text-indigo-700 rotate-180' : 'text-gray-400'
+                    }`}>
+                      <ChevronDown size={15} />
+                    </div>
                   </div>
                 </button>
 
                 {isSidebarProfileFolderOpen && (
-                  <div className="p-3 border-t border-slate-100 bg-white">
+                  <div className="p-3 border-t border-slate-100 bg-white animate-fade-in">
                     <SidebarProfileFolder
                       sheetName={sheetName}
                       sheetTagline={sheetTagline}
