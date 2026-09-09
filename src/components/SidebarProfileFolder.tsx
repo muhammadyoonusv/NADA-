@@ -28,7 +28,9 @@ import {
   Scale,
   Briefcase,
   GraduationCap,
-  FolderLock
+  FolderLock,
+  Camera,
+  ChevronDown
 } from 'lucide-react';
 
 interface SidebarProfileFolderProps {
@@ -96,6 +98,7 @@ export function SidebarProfileFolder({
   const [saveSuccess, setSaveSuccess] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [logoSavedFast, setLogoSavedFast] = useState(false);
+  const [showPhotoOptions, setShowPhotoOptions] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const galleryInputRef = useRef<HTMLInputElement>(null);
 
@@ -239,6 +242,137 @@ export function SidebarProfileFolder({
       </div>
 
       <form onSubmit={handleSaveProfile} className="space-y-3.5">
+        {/* Profile Photo / Emblem Button (Placed above Organization / Title) */}
+        <div className="space-y-2">
+          <div className="flex items-center justify-between">
+            <label className="block text-[10px] font-bold text-gray-600 uppercase tracking-wider font-mono">
+              Profile Photo & Emblem
+            </label>
+            {logoSavedFast && (
+              <span className="text-[9px] font-bold text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded flex items-center gap-0.5">
+                <Check size={10} /> Saved!
+              </span>
+            )}
+          </div>
+
+          <button
+            type="button"
+            onClick={() => setShowPhotoOptions(!showPhotoOptions)}
+            className="w-full flex items-center gap-3 p-2.5 bg-slate-50 hover:bg-slate-100 border border-slate-200 hover:border-indigo-300 rounded-xl transition-all cursor-pointer group text-left shadow-3xs"
+            title="Click to edit profile photo & emblem"
+          >
+            <div className="relative w-11 h-11 rounded-xl bg-gradient-to-tr from-indigo-700 via-indigo-600 to-blue-600 flex items-center justify-center text-white shadow-xs overflow-hidden shrink-0 group-hover:scale-102 transition-transform">
+              {tempLogoIcon.startsWith('data:image/') ? (
+                <img src={tempLogoIcon} alt="Emblem" className="w-full h-full object-cover" />
+              ) : tempLogoIcon === 'Shield' ? (
+                <Shield size={20} />
+              ) : tempLogoIcon === 'BookOpen' ? (
+                <BookOpen size={20} />
+              ) : tempLogoIcon === 'Users' ? (
+                <Users size={20} />
+              ) : tempLogoIcon === 'Award' ? (
+                <Award size={20} />
+              ) : tempLogoIcon === 'Star' ? (
+                <Star size={20} />
+              ) : tempLogoIcon === 'Heart' ? (
+                <Heart size={20} />
+              ) : tempLogoIcon === 'Zap' ? (
+                <Zap size={20} />
+              ) : tempLogoIcon === 'Building2' ? (
+                <Building2 size={20} />
+              ) : tempLogoIcon === 'Scale' ? (
+                <Scale size={20} />
+              ) : tempLogoIcon === 'Briefcase' ? (
+                <Briefcase size={20} />
+              ) : tempLogoIcon === 'GraduationCap' ? (
+                <GraduationCap size={20} />
+              ) : (
+                <FolderLock size={20} />
+              )}
+              {/* Hover camera badge */}
+              <div className="absolute inset-0 bg-black/30 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white">
+                <Camera size={14} />
+              </div>
+            </div>
+
+            <div className="min-w-0 flex-1">
+              <div className="text-xs font-bold text-gray-800 group-hover:text-indigo-600 transition-colors truncate">
+                {tempSheetName || 'Class Union Ledger'}
+              </div>
+              <div className="text-[11px] text-indigo-600 font-medium flex items-center gap-1 mt-0.5">
+                <Camera size={12} />
+                <span>{showPhotoOptions ? 'Close photo options' : 'Click to edit photo / emblem'}</span>
+              </div>
+            </div>
+
+            <div className="p-1 rounded-md bg-white border border-slate-200 text-slate-400 group-hover:text-indigo-600 group-hover:border-indigo-200 transition-colors shrink-0">
+              <ChevronDown size={14} className={`transition-transform duration-200 ${showPhotoOptions ? 'rotate-180 text-indigo-600' : ''}`} />
+            </div>
+          </button>
+
+          {/* Collapsible Photo Editing Options */}
+          {showPhotoOptions && (
+            <div className="p-3 bg-slate-50/90 border border-indigo-100 rounded-xl space-y-2.5 animate-in fade-in slide-in-from-top-1 duration-150">
+              <div className="flex items-center justify-between text-xs font-bold text-gray-700">
+                <span>Select Icon Emblem</span>
+                <span className="text-[10px] text-gray-400 font-normal">Saves instantly</span>
+              </div>
+
+              {/* Emblem grid */}
+              <div className="grid grid-cols-6 gap-1.5">
+                {EMBLEM_PRESETS.map((item) => {
+                  const IconComp = item.icon;
+                  const isSelected = tempLogoIcon === item.id;
+                  return (
+                    <button
+                      key={item.id}
+                      type="button"
+                      onClick={() => handleSelectEmblem(item.id)}
+                      title={item.label}
+                      className={`p-2 rounded-lg border transition-all flex items-center justify-center cursor-pointer ${
+                        isSelected 
+                          ? 'bg-indigo-600 text-white border-indigo-600 shadow-xs ring-1 ring-indigo-300' 
+                          : 'bg-white text-slate-700 border-slate-250 hover:bg-slate-50'
+                      }`}
+                    >
+                      <IconComp size={15} className={isSelected ? 'text-white' : 'text-indigo-600'} />
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* Upload Custom Photo Button */}
+              <div className="flex items-center gap-2 pt-1 border-t border-slate-200">
+                <button
+                  type="button"
+                  onClick={() => galleryInputRef.current?.click()}
+                  className="flex-1 inline-flex items-center justify-center gap-1.5 py-1.5 px-2 bg-white hover:bg-slate-50 text-slate-700 border border-slate-250 rounded-lg text-[11px] font-semibold transition-colors cursor-pointer shadow-3xs"
+                >
+                  <Upload size={13} className="text-indigo-600" />
+                  <span>Upload Custom Photo</span>
+                </button>
+                {tempLogoIcon.startsWith('data:image/') && (
+                  <button
+                    type="button"
+                    onClick={() => handleSelectEmblem('FolderLock')}
+                    className="p-1.5 text-rose-600 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer"
+                    title="Remove photo"
+                  >
+                    <Trash2 size={14} />
+                  </button>
+                )}
+                <input
+                  ref={galleryInputRef}
+                  type="file"
+                  accept="image/*"
+                  onChange={handleGalleryUpload}
+                  className="hidden"
+                />
+              </div>
+            </div>
+          )}
+        </div>
+
         {/* Organization / Sheet Name */}
         <div>
           <label className="block text-[10px] font-bold text-gray-600 uppercase tracking-wider mb-1 font-mono">
@@ -330,111 +464,6 @@ export function SidebarProfileFolder({
               value={tempAcademicYear}
               onChange={(e) => setTempAcademicYear(e.target.value)}
               className="w-full pl-7 pr-2.5 py-1.5 border border-gray-250 rounded-lg text-xs font-mono font-bold text-slate-800 focus:ring-2 focus:ring-indigo-500 focus:outline-none transition-all"
-            />
-          </div>
-        </div>
-
-        {/* Visual Identity & Emblem Picker */}
-        <div className="pt-2.5 border-t border-gray-150">
-          <div className="flex items-center justify-between mb-2">
-            <label className="flex items-center gap-2 text-sm font-bold text-gray-800 tracking-normal cursor-pointer">
-              <Sparkles size={16} className="text-indigo-600 shrink-0" />
-              <span>Profile Emblem & Icon</span>
-            </label>
-            {logoSavedFast && (
-              <span className="text-[9px] font-bold text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded flex items-center gap-0.5">
-                <Check size={10} /> Saved!
-              </span>
-            )}
-          </div>
-
-          {/* Live Emblem Thumbnail */}
-          <div className="flex items-center gap-3 p-2 bg-slate-50 border border-slate-200 rounded-xl mb-2">
-            <div className="w-12 h-12 rounded-xl bg-gradient-to-tr from-indigo-700 via-indigo-600 to-blue-600 flex items-center justify-center text-white shadow-xs overflow-hidden shrink-0">
-              {tempLogoIcon.startsWith('data:image/') ? (
-                <img src={tempLogoIcon} alt="Emblem" className="w-full h-full object-cover" />
-              ) : tempLogoIcon === 'Shield' ? (
-                <Shield size={22} />
-              ) : tempLogoIcon === 'BookOpen' ? (
-                <BookOpen size={22} />
-              ) : tempLogoIcon === 'Users' ? (
-                <Users size={22} />
-              ) : tempLogoIcon === 'Award' ? (
-                <Award size={22} />
-              ) : tempLogoIcon === 'Star' ? (
-                <Star size={22} />
-              ) : tempLogoIcon === 'Heart' ? (
-                <Heart size={22} />
-              ) : tempLogoIcon === 'Zap' ? (
-                <Zap size={22} />
-              ) : tempLogoIcon === 'Building2' ? (
-                <Building2 size={22} />
-              ) : tempLogoIcon === 'Scale' ? (
-                <Scale size={22} />
-              ) : tempLogoIcon === 'Briefcase' ? (
-                <Briefcase size={22} />
-              ) : tempLogoIcon === 'GraduationCap' ? (
-                <GraduationCap size={22} />
-              ) : (
-                <FolderLock size={22} />
-              )}
-            </div>
-            <div className="min-w-0 flex-1">
-              <div className="text-xs font-bold text-gray-800 truncate">
-                {tempSheetName || 'Class Union Ledger'}
-              </div>
-            </div>
-          </div>
-
-          {/* Emblem grid */}
-          <div className="grid grid-cols-6 gap-1.5 mb-2">
-            {EMBLEM_PRESETS.map((item) => {
-              const IconComp = item.icon;
-              const isSelected = tempLogoIcon === item.id;
-              return (
-                <button
-                  key={item.id}
-                  type="button"
-                  onClick={() => handleSelectEmblem(item.id)}
-                  title={item.label}
-                  className={`p-2 rounded-lg border transition-all flex items-center justify-center cursor-pointer ${
-                    isSelected 
-                      ? 'bg-indigo-600 text-white border-indigo-600 shadow-xs ring-1 ring-indigo-300' 
-                      : 'bg-white text-slate-700 border-slate-250 hover:bg-slate-50'
-                  }`}
-                >
-                  <IconComp size={15} className={isSelected ? 'text-white' : 'text-indigo-600'} />
-                </button>
-              );
-            })}
-          </div>
-
-          {/* Upload Button */}
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={() => galleryInputRef.current?.click()}
-              className="flex-1 inline-flex items-center justify-center gap-1.5 py-1.5 px-2 bg-white hover:bg-slate-50 text-slate-700 border border-slate-250 rounded-lg text-[11px] font-semibold transition-colors cursor-pointer shadow-3xs"
-            >
-              <Upload size={13} className="text-indigo-600" />
-              <span>Upload Custom Photo</span>
-            </button>
-            {tempLogoIcon.startsWith('data:image/') && (
-              <button
-                type="button"
-                onClick={() => handleSelectEmblem('FolderLock')}
-                className="p-1.5 text-rose-600 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer"
-                title="Remove photo"
-              >
-                <Trash2 size={14} />
-              </button>
-            )}
-            <input
-              ref={galleryInputRef}
-              type="file"
-              accept="image/*"
-              onChange={handleGalleryUpload}
-              className="hidden"
             />
           </div>
         </div>

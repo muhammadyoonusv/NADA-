@@ -90,9 +90,6 @@ export const PrivacySecurityView: React.FC<PrivacySecurityViewProps> = ({
           </div>
           <div>
             <h2 className="text-base font-bold text-gray-900">Privacy & Security</h2>
-            <p className="text-xs text-gray-500 mt-0.5">
-              Access control protocols, encryption standards, and institutional data governance
-            </p>
           </div>
         </div>
 
@@ -190,9 +187,6 @@ export const PrivacySecurityView: React.FC<PrivacySecurityViewProps> = ({
               </div>
               <div>
                 <h3 className="text-sm font-bold text-gray-900">Access Control & Permissions (RBAC)</h3>
-                <p className="text-xs text-gray-500">
-                  Strict enforcement of editing rights prevents unauthorized modifications to financial accounts.
-                </p>
               </div>
             </div>
             <button
@@ -234,9 +228,6 @@ export const PrivacySecurityView: React.FC<PrivacySecurityViewProps> = ({
             </div>
             <div>
               <h3 className="text-sm font-bold text-gray-900">Data Privacy & Zero Telemetry</h3>
-              <p className="text-xs text-gray-500">
-                Institutional financial transactions remain confidential and isolated to your verified account.
-              </p>
             </div>
           </div>
 
@@ -271,9 +262,6 @@ export const PrivacySecurityView: React.FC<PrivacySecurityViewProps> = ({
             </div>
             <div>
               <h3 className="text-sm font-bold text-gray-900">Local Cache & Device Storage</h3>
-              <p className="text-xs text-gray-500">
-                Manage temporary offline state stored within your local browser session.
-              </p>
             </div>
           </div>
 
