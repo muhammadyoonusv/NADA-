@@ -50,15 +50,7 @@ export const ProfilePageView: React.FC<ProfilePageViewProps> = ({
             <User size={20} />
           </div>
           <div>
-            <div className="flex items-center gap-2">
-              <h2 className="text-base font-bold text-gray-900">Institutional Profile & Settings</h2>
-              <span className="text-[10px] font-mono font-bold text-indigo-700 bg-indigo-50 border border-indigo-100 px-2 py-0.5 rounded-full">
-                PAGE VIEW
-              </span>
-            </div>
-            <p className="text-xs text-gray-500 mt-0.5">
-              Customize ledger headers, auditable treasurer signature, fiscal year, official emblem, and authorized editors
-            </p>
+            <h2 className="text-base font-bold text-gray-900">Profile & Settings</h2>
           </div>
         </div>
 

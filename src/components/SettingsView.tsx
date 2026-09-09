@@ -37,7 +37,8 @@ import {
   FolderLock,
   Image,
   Upload,
-  AlertCircle
+  AlertCircle,
+  ArrowLeft
 } from 'lucide-react';
 
 interface SettingsViewProps {
@@ -55,6 +56,7 @@ interface SettingsViewProps {
   currentUser: any | null;
   
   onQuickUpdateLogo?: (newLogo: string) => void;
+  onNavigateHome?: () => void;
 
   onSaveConfig: (config: {
     sheetName: string;
@@ -87,6 +89,7 @@ export function SettingsView({
   isEditor,
   currentUser,
   onQuickUpdateLogo,
+  onNavigateHome,
   onSaveConfig,
   onLoadPresets,
   onClearAll,
@@ -311,18 +314,45 @@ export function SettingsView({
     <div className="space-y-6 animate-fade-in">
       {/* Tab Header Banner */}
       <div className="bg-slate-900 text-white rounded-2xl p-6 shadow-sm flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
-        <div className="space-y-1">
-          <h2 className="text-xl font-bold flex items-center gap-2 tracking-tight">
-            <Settings size={22} className="text-indigo-400 rotate-45" />
-            <span>Settings & Database Maintenance</span>
-          </h2>
-          <p className="text-xs text-slate-400 max-w-xl leading-relaxed">
-            Manage your ledger profile information, synchronize offline balances, backup double-entry sheets, or restore verified transaction checkpoints instantly.
-          </p>
+        <div className="flex items-center gap-3.5">
+          {onNavigateHome && (
+            <button
+              type="button"
+              onClick={onNavigateHome}
+              className="p-2.5 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white rounded-xl transition-colors cursor-pointer shrink-0 border border-slate-700/80"
+              title="Return to Home Dashboard"
+            >
+              <ArrowLeft size={18} />
+            </button>
+          )}
+          <div className="space-y-1">
+            <h2 className="text-xl font-bold flex items-center gap-2 tracking-tight">
+              <Settings size={22} className="text-indigo-400 rotate-45" />
+              <span>Settings & Database Maintenance</span>
+              <span className="text-[10px] font-mono font-bold text-indigo-300 bg-indigo-950/80 border border-indigo-700/60 px-2 py-0.5 rounded-full ml-1">
+                PAGE VIEW
+              </span>
+            </h2>
+            <p className="text-xs text-slate-400 max-w-xl leading-relaxed">
+              Manage your ledger profile information, synchronize offline balances, backup double-entry sheets, or restore verified transaction checkpoints instantly.
+            </p>
+          </div>
         </div>
-        <div className="flex items-center gap-2 bg-slate-800 border border-slate-700/60 px-4 py-2 rounded-xl text-xs font-semibold select-none font-mono text-emerald-400">
-          <CloudLightning size={14} className="text-emerald-400 animate-pulse" />
-          <span>CLOUDFIRE STORE CONNECTED</span>
+        <div className="flex items-center gap-2 self-end md:self-auto">
+          {onNavigateHome && (
+            <button
+              type="button"
+              onClick={onNavigateHome}
+              className="px-3.5 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer"
+            >
+              <ArrowLeft size={14} />
+              <span>Back to Dashboard</span>
+            </button>
+          )}
+          <div className="flex items-center gap-2 bg-slate-800 border border-slate-700/60 px-4 py-2 rounded-xl text-xs font-semibold select-none font-mono text-emerald-400">
+            <CloudLightning size={14} className="text-emerald-400 animate-pulse" />
+            <span>CLOUDFIRE STORE CONNECTED</span>
+          </div>
         </div>
       </div>
 

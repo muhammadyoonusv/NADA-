@@ -21,6 +21,7 @@ import { NotificationCenter, AppNotification } from './components/NotificationCe
 import { SidebarProfileFolder } from './components/SidebarProfileFolder';
 import { ProfilePageView } from './components/ProfilePageView';
 import { QuickTemplatesPageView } from './components/QuickTemplatesPageView';
+import { PrivacySecurityView } from './components/PrivacySecurityView';
 import { Users as UsersIcon } from 'lucide-react';
 import {
   collection,
@@ -81,7 +82,8 @@ import {
   MoreVertical,
   LogOut,
   ChevronDown,
-  ChevronRight
+  ChevronRight,
+  ShieldCheck
 } from 'lucide-react';
 
 const DEFAULT_STUDENTS: Student[] = [];
@@ -174,7 +176,7 @@ export default function App() {
     }
   }, [toast]);
 
-  const [activeTab, setActiveTab] = useState<'home' | 'journal' | 'ledgers' | 'trial' | 'receipts' | 'expenditure' | 'balance' | 'chart' | 'dues' | 'settings' | 'profile' | 'templates'>('home');
+  const [activeTab, setActiveTab] = useState<'home' | 'journal' | 'ledgers' | 'trial' | 'receipts' | 'expenditure' | 'balance' | 'chart' | 'dues' | 'settings' | 'profile' | 'templates' | 'privacy'>('home');
   const [isAppSidebarOpen, setIsAppSidebarOpen] = useState(false);
   const [isReportsMobileMenuOpen, setIsReportsMobileMenuOpen] = useState(false);
   const [isHelpOpen, setIsHelpOpen] = useState(false);
@@ -1527,7 +1529,7 @@ export default function App() {
                     <button
                       id="menu-option-settings"
                       onClick={() => {
-                        setActiveTab(activeTab === 'settings' ? 'journal' : 'settings');
+                        setActiveTab('settings');
                         setIsTopMenuOpen(false);
                       }}
                       className="w-full px-3 py-2 text-left text-xs font-semibold text-gray-700 hover:bg-slate-50 hover:text-slate-900 flex items-center gap-2.5 transition-colors cursor-pointer whitespace-nowrap"
@@ -1748,8 +1750,8 @@ export default function App() {
           </div>
         )}
 
-        {/* Dashboard Cards summary section (shown on tabs other than Home, Profile, and Templates to avoid duplicate cards) */}
-        {accounts.length > 0 && activeTab !== 'home' && activeTab !== 'profile' && activeTab !== 'templates' && (
+        {/* Dashboard Cards summary section (shown on ledger tabs; hidden on Home, Profile, Templates, Settings, and Privacy dedicated pages) */}
+        {accounts.length > 0 && activeTab !== 'home' && activeTab !== 'profile' && activeTab !== 'templates' && activeTab !== 'settings' && activeTab !== 'privacy' && (
           <DashboardCards 
             accounts={accounts} 
             entries={entries} 
@@ -1758,36 +1760,38 @@ export default function App() {
           />
         )}
 
-        {/* Tabs navigation list (Desktop View Only) */}
-        <div className="hidden md:flex bg-white border border-gray-200 rounded-xl p-1.5 overflow-x-auto gap-1 shadow-3xs sticky top-16 sm:top-20 z-30 whitespace-nowrap [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden scroll-smooth">
-          {[
-            { id: 'home', label: 'Home', icon: Home, Menu, color: 'text-indigo-600' },
-            { id: 'journal', label: 'Journal Spreadsheet', icon: FileText, color: 'text-indigo-600' },
-            { id: 'ledgers', label: 'General Ledger', icon: BookOpen, color: 'text-blue-600' },
-            { id: 'trial', label: 'Trial Balance', icon: Wallet, color: 'text-orange-500' },
-            { id: 'receipts', label: 'Receipts & Payments', icon: RefreshCw, color: 'text-emerald-600' },
-            { id: 'expenditure', label: 'Income & Expenditure', icon: TrendingUp, color: 'text-indigo-500' },
-            { id: 'balance', label: 'Balance Sheet', icon: Scale, color: 'text-teal-600' },
-          ].map((tab) => {
-            const Icon = tab.icon;
-            const isActive = activeTab === tab.id;
-            return (
-              <button
-                key={tab.id}
-                onClick={() => setActiveTab(tab.id as any)}
-                title={`Select ${tab.label}`}
-                className={`flex-none inline-flex items-center gap-2 px-4 py-2.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                  isActive
-                    ? 'bg-slate-900 text-white shadow-xs scale-[0.98]'
-                    : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
-                }`}
-              >
-                <Icon size={14} className={isActive ? 'text-white' : tab.color} />
-                {tab.label}
-              </button>
-            );
-          })}
-        </div>
+        {/* Tabs navigation list (Desktop View Only - hidden on dedicated pages: profile, templates, settings, privacy) */}
+        {activeTab !== 'profile' && activeTab !== 'templates' && activeTab !== 'settings' && activeTab !== 'privacy' && (
+          <div className="hidden md:flex bg-white border border-gray-200 rounded-xl p-1.5 overflow-x-auto gap-1 shadow-3xs sticky top-16 sm:top-20 z-30 whitespace-nowrap [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden scroll-smooth">
+            {[
+              { id: 'home', label: 'Home', icon: Home, Menu, color: 'text-indigo-600' },
+              { id: 'journal', label: 'Journal Spreadsheet', icon: FileText, color: 'text-indigo-600' },
+              { id: 'ledgers', label: 'General Ledger', icon: BookOpen, color: 'text-blue-600' },
+              { id: 'trial', label: 'Trial Balance', icon: Wallet, color: 'text-orange-500' },
+              { id: 'receipts', label: 'Receipts & Payments', icon: RefreshCw, color: 'text-emerald-600' },
+              { id: 'expenditure', label: 'Income & Expenditure', icon: TrendingUp, color: 'text-indigo-500' },
+              { id: 'balance', label: 'Balance Sheet', icon: Scale, color: 'text-teal-600' },
+            ].map((tab) => {
+              const Icon = tab.icon;
+              const isActive = activeTab === tab.id;
+              return (
+                <button
+                  key={tab.id}
+                  onClick={() => setActiveTab(tab.id as any)}
+                  title={`Select ${tab.label}`}
+                  className={`flex-none inline-flex items-center gap-2 px-4 py-2.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                    isActive
+                      ? 'bg-slate-900 text-white shadow-xs scale-[0.98]'
+                      : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
+                  }`}
+                >
+                  <Icon size={14} className={isActive ? 'text-white' : tab.color} />
+                  {tab.label}
+                </button>
+              );
+            })}
+          </div>
+        )}
 
         {/* Dynamic Tab Pane Render */}
         <div className="transition-all duration-300">
@@ -1900,6 +1904,7 @@ export default function App() {
               currentUser={currentUser}
               onSaveConfig={handleSaveConfig}
               onQuickUpdateLogo={handleQuickUpdateLogo}
+              onNavigateHome={() => setActiveTab('home')}
               onLoadPresets={onLoadPresets}
               onClearAll={onClearAll}
               onImportBackup={onImportBackup}
@@ -1939,6 +1944,22 @@ export default function App() {
               onGenerateAiPresets={handleGenerateAiPresets}
               onNavigateJournal={() => setActiveTab('journal')}
               onNavigateHome={() => setActiveTab('home')}
+            />
+          )}
+
+          {activeTab === 'privacy' && (
+            <PrivacySecurityView
+              currentUser={currentUser}
+              isEditor={isEditor}
+              allowedEmails={allowedEmails}
+              treasurerName={treasurerName}
+              treasurerEmail={treasurerEmail}
+              academicYear={academicYear}
+              totalEntries={entries.length}
+              totalAccounts={accounts.length}
+              onNavigateHome={() => setActiveTab('home')}
+              onOpenProfile={() => setActiveTab('profile')}
+              onOpenSettings={() => setActiveTab('settings')}
             />
           )}
         </div>
@@ -2182,7 +2203,7 @@ export default function App() {
                       ? 'bg-indigo-50 border-l-4 border-l-indigo-600 text-indigo-950'
                       : 'bg-slate-50/60 hover:bg-indigo-50/40 text-slate-800 hover:text-indigo-900'
                   }`}
-                  title="Open Institutional Profile & Settings Page"
+                  title="Open Profile & Settings Page"
                 >
                   <div className="flex items-center gap-2.5 font-bold text-xs">
                     <UserIcon size={16} className={activeTab === 'profile' ? 'text-indigo-600' : 'text-slate-600 group-hover:text-indigo-600 transition-colors'} />
@@ -2223,6 +2244,37 @@ export default function App() {
                       size={16} 
                       className={`transition-colors ${
                         activeTab === 'templates' ? 'text-indigo-600' : 'text-gray-400 group-hover:text-indigo-600'
+                      }`} 
+                    />
+                  </div>
+                </button>
+              </div>
+
+              {/* Button 3: Privacy & Security (Opens dedicated Privacy & Security page) */}
+              <div className="border border-slate-200 rounded-xl overflow-hidden bg-white shadow-3xs transition-all">
+                <button
+                  type="button"
+                  id="privacy-sidebar-button"
+                  onClick={() => {
+                    setActiveTab('privacy');
+                    setIsAppSidebarOpen(false);
+                  }}
+                  className={`w-full flex items-center justify-between p-3.5 text-left cursor-pointer transition-colors group ${
+                    activeTab === 'privacy'
+                      ? 'bg-indigo-50 border-l-4 border-l-indigo-600 text-indigo-950'
+                      : 'bg-slate-50/60 hover:bg-indigo-50/40 text-slate-800 hover:text-indigo-900'
+                  }`}
+                  title="Open Privacy & Security Page"
+                >
+                  <div className="flex items-center gap-2.5 font-bold text-xs">
+                    <ShieldCheck size={16} className={activeTab === 'privacy' ? 'text-indigo-600' : 'text-slate-600 group-hover:text-indigo-600 transition-colors'} />
+                    <span>Privacy & Security</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <ChevronRight 
+                      size={16} 
+                      className={`transition-colors ${
+                        activeTab === 'privacy' ? 'text-indigo-600' : 'text-gray-400 group-hover:text-indigo-600'
                       }`} 
                     />
                   </div>

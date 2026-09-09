@@ -232,7 +232,6 @@ export function SidebarProfileFolder({
           <h4 className="text-xs font-bold text-gray-900 tracking-tight flex items-center gap-1.5">
             <span>Profile & Institutional Identity</span>
           </h4>
-          <p className="text-[10px] text-gray-500">Settings and identity for this ledger sheet</p>
         </div>
         <span className="text-[9px] font-bold font-mono px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-700 border border-indigo-100">
           SETTINGS
@@ -336,10 +335,11 @@ export function SidebarProfileFolder({
         </div>
 
         {/* Visual Identity & Emblem Picker */}
-        <div className="pt-2 border-t border-gray-150">
-          <div className="flex items-center justify-between mb-1.5">
-            <label className="block text-[10px] font-bold text-gray-700 uppercase tracking-wider font-mono">
-              Profile Emblem & Icon
+        <div className="pt-2.5 border-t border-gray-150">
+          <div className="flex items-center justify-between mb-2">
+            <label className="flex items-center gap-2 text-sm font-bold text-gray-800 tracking-normal cursor-pointer">
+              <Sparkles size={16} className="text-indigo-600 shrink-0" />
+              <span>Profile Emblem & Icon</span>
             </label>
             {logoSavedFast && (
               <span className="text-[9px] font-bold text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded flex items-center gap-0.5">
@@ -382,9 +382,6 @@ export function SidebarProfileFolder({
             <div className="min-w-0 flex-1">
               <div className="text-xs font-bold text-gray-800 truncate">
                 {tempSheetName || 'Class Union Ledger'}
-              </div>
-              <div className="text-[10px] text-gray-500 truncate">
-                {tempLogoIcon.startsWith('data:image/') ? 'Custom Photo' : `Symbol: ${tempLogoIcon}`}
               </div>
             </div>
           </div>
@@ -443,10 +440,10 @@ export function SidebarProfileFolder({
         </div>
 
         {/* Role-Based Access Control / Whitelisted Editors */}
-        <div className="pt-2 border-t border-gray-150">
-          <div className="flex items-center justify-between mb-1.5">
-            <div className="flex items-center gap-1 text-[10px] font-bold text-gray-700 uppercase tracking-wider font-mono">
-              <ShieldAlert size={12} className="text-indigo-600" />
+        <div className="pt-2.5 border-t border-gray-150">
+          <div className="flex items-center justify-between mb-2">
+            <div className="flex items-center gap-2 text-sm font-bold text-gray-800 tracking-normal">
+              <ShieldAlert size={16} className="text-indigo-600 shrink-0" />
               <span>Whitelisted Editors ({Math.max(0, whitelistedEmails.length - 2)})</span>
             </div>
             {isSuperAdmin && (
