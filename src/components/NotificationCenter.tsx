@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Bell, X, CheckCircle2, AlertCircle, Info, Trash2, CheckSquare } from 'lucide-react';
+import { Bell, X, CheckCircle2, AlertCircle, Info, CheckCheck, Check } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
 export interface AppNotification {
@@ -13,11 +13,11 @@ export interface AppNotification {
 interface NotificationCenterProps {
   notifications: AppNotification[];
   onMarkAllAsRead: () => void;
-  onClearAll: () => void;
+  onClearAll?: () => void;
   onMarkAsRead: (id: string) => void;
 }
 
-export function NotificationCenter({ notifications, onMarkAllAsRead, onClearAll, onMarkAsRead }: NotificationCenterProps) {
+export function NotificationCenter({ notifications, onMarkAllAsRead, onMarkAsRead }: NotificationCenterProps) {
   const [isOpen, setIsOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
@@ -100,39 +100,40 @@ export function NotificationCenter({ notifications, onMarkAllAsRead, onClearAll,
               </div>
 
               <div className="p-3 border-b border-gray-100 flex items-center justify-between bg-slate-50">
-                <h3 className="font-semibold text-sm text-slate-800 flex items-center gap-1.5">
-                  <Bell size={14} className="text-slate-500" />
-                  Notifications
-                </h3>
+                <div className="flex items-center gap-2">
+                  <h3 className="font-semibold text-sm text-slate-800 flex items-center gap-1.5">
+                    <Bell size={14} className="text-slate-500" />
+                    Notifications
+                  </h3>
+                  {unreadCount > 0 && (
+                    <span className="text-[11px] font-semibold bg-indigo-50 text-indigo-700 px-2 py-0.5 rounded-full border border-indigo-100 font-mono">
+                      {unreadCount} new
+                    </span>
+                  )}
+                </div>
                 <div className="flex items-center gap-1.5 sm:gap-2">
                   {unreadCount > 0 && (
                     <button
                       onClick={onMarkAllAsRead}
                       title="Mark all as read"
-                      className="p-1.5 sm:p-1 hover:bg-slate-200 rounded-md text-slate-500 hover:text-slate-800 transition-colors"
+                      className="px-2.5 py-1 text-xs font-semibold text-indigo-600 hover:text-indigo-800 hover:bg-indigo-50 border border-indigo-200/70 rounded-lg transition-colors flex items-center gap-1 cursor-pointer"
                     >
-                      <CheckSquare size={15} />
-                    </button>
-                  )}
-                  {notifications.length > 0 && (
-                    <button
-                      onClick={onClearAll}
-                      title="Clear all"
-                      className="p-1.5 sm:p-1 hover:bg-rose-100 rounded-md text-rose-500 hover:text-rose-700 transition-colors"
-                    >
-                      <Trash2 size={15} />
+                      <CheckCheck size={14} />
+                      <span className="hidden sm:inline">Mark all as read</span>
+                      <span className="sm:hidden">Read all</span>
                     </button>
                   )}
                   <button
                     onClick={() => setIsOpen(false)}
-                    className="p-1.5 sm:p-1 hover:bg-slate-200 rounded-md text-slate-500 hover:text-slate-800 transition-colors"
+                    className="p-1.5 hover:bg-slate-200 rounded-md text-slate-500 hover:text-slate-800 transition-colors cursor-pointer"
+                    title="Close notifications"
                   >
                     <X size={16} />
                   </button>
                 </div>
               </div>
 
-            <div className="overflow-y-auto flex-1 p-1 bg-white">
+            <div className="overflow-y-auto flex-1 p-1.5 bg-white">
               {notifications.length === 0 ? (
                 <div className="p-8 text-center flex flex-col items-center justify-center text-gray-400">
                   <div className="w-12 h-12 rounded-full bg-gray-50 flex items-center justify-center mb-3">
@@ -142,7 +143,7 @@ export function NotificationCenter({ notifications, onMarkAllAsRead, onClearAll,
                   <p className="text-xs mt-1">No new notifications</p>
                 </div>
               ) : (
-                <div className="space-y-0.5">
+                <div className="space-y-1">
                   <AnimatePresence initial={false}>
                     {notifications.map((notif) => (
                       <motion.div
@@ -151,24 +152,45 @@ export function NotificationCenter({ notifications, onMarkAllAsRead, onClearAll,
                         animate={{ opacity: 1, height: 'auto' }}
                         exit={{ opacity: 0, height: 0 }}
                         transition={{ duration: 0.2 }}
-                        className={`group p-3 rounded-lg flex items-start gap-3 transition-colors ${
-                          notif.read ? 'bg-white hover:bg-gray-50' : 'bg-blue-50/50 hover:bg-blue-50'
+                        className={`group p-3 rounded-xl flex items-start gap-3 transition-colors cursor-pointer ${
+                          notif.read ? 'bg-white hover:bg-slate-50/80 border border-transparent' : 'bg-indigo-50/40 hover:bg-indigo-50/70 border border-indigo-100/70 shadow-3xs'
                         }`}
                         onClick={() => !notif.read && onMarkAsRead(notif.id)}
                       >
-                        <div className="mt-0.5 shrink-0 bg-white rounded-full p-0.5 shadow-xs">
+                        <div className="mt-0.5 shrink-0 bg-white rounded-full p-1 shadow-3xs border border-gray-100">
                           {getIcon(notif.type)}
                         </div>
                         <div className="flex-1 min-w-0">
                           <p className={`text-[13px] leading-relaxed ${notif.read ? 'text-gray-600' : 'text-gray-900 font-medium'}`}>
                             {notif.message}
                           </p>
-                          <p className="text-[10px] text-gray-400 mt-1 font-medium tracking-wide">
-                            {formatTime(notif.timestamp)}
-                          </p>
+                          <div className="flex items-center justify-between gap-2 mt-1.5">
+                            <span className="text-[10px] text-gray-400 font-medium tracking-wide font-mono">
+                              {formatTime(notif.timestamp)}
+                            </span>
+                            {notif.read ? (
+                              <span className="text-[10px] font-medium text-slate-400 flex items-center gap-1">
+                                <CheckCheck size={12} className="text-slate-400" />
+                                <span>Read</span>
+                              </span>
+                            ) : (
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  onMarkAsRead(notif.id);
+                                }}
+                                className="px-2 py-0.5 text-[11px] font-semibold text-indigo-600 bg-white hover:bg-indigo-50 hover:text-indigo-800 border border-indigo-200/80 rounded-md flex items-center gap-1 transition-colors cursor-pointer shadow-3xs"
+                                title="Mark this notification as read"
+                              >
+                                <Check size={11} strokeWidth={2.5} />
+                                <span>Mark as read</span>
+                              </button>
+                            )}
+                          </div>
                         </div>
                         {!notif.read && (
-                          <div className="shrink-0 w-2 h-2 rounded-full bg-blue-500 mt-1.5" />
+                          <div className="shrink-0 w-2 h-2 rounded-full bg-indigo-500 mt-2" title="Unread" />
                         )}
                       </motion.div>
                     ))}

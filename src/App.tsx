@@ -1223,6 +1223,19 @@ export default function App() {
     })();
   };
 
+  const handleUpdateAllowedEmails = async (newEmails: string[]) => {
+    await handleSaveConfig({
+      sheetName,
+      sheetTagline,
+      treasurerName,
+      treasurerEmail,
+      academicYear,
+      allowedEmails: newEmails,
+      logoIcon,
+    });
+    showToast('Authorized whitelist updated successfully!', 'success');
+  };
+
   // Instant save on click for Logo/Photo Emblem
   const handleQuickUpdateLogo = (newLogo: string) => {
     // 0ms instant UI update
@@ -1960,6 +1973,7 @@ export default function App() {
               onNavigateHome={() => setActiveTab('home')}
               onOpenProfile={() => setActiveTab('profile')}
               onOpenSettings={() => setActiveTab('settings')}
+              onUpdateAllowedEmails={handleUpdateAllowedEmails}
             />
           )}
         </div>

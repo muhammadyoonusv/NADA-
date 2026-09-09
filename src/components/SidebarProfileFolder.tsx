@@ -11,12 +11,8 @@ import {
   Calendar, 
   Check, 
   Sparkles, 
-  ShieldAlert, 
   RefreshCw,
-  Plus,
-  Trash2,
   Upload,
-  ExternalLink,
   Shield,
   BookOpen,
   Users,
@@ -29,8 +25,9 @@ import {
   Briefcase,
   GraduationCap,
   FolderLock,
+  ChevronDown,
   Camera,
-  ChevronDown
+  Trash2
 } from 'lucide-react';
 
 interface SidebarProfileFolderProps {
@@ -91,7 +88,6 @@ export function SidebarProfileFolder({
   const [tempTreasurerEmail, setTempTreasurerEmail] = useState(treasurerEmail);
   const [tempAcademicYear, setTempAcademicYear] = useState(academicYear);
   const [tempLogoIcon, setTempLogoIcon] = useState(logoIcon);
-  const [whitelistedEmails, setWhitelistedEmails] = useState<string[]>([]);
 
   const isSuperAdmin = !!(currentUser && currentUser.email && ['klrmuhsin809@gmail.com', 'yoonuschr@gmail.com'].includes(currentUser.email.toLowerCase()));
 
@@ -109,16 +105,7 @@ export function SidebarProfileFolder({
     setTempTreasurerEmail(treasurerEmail);
     setTempAcademicYear(academicYear);
     setTempLogoIcon(logoIcon);
-
-    const unique: string[] = Array.from(new Set<string>(
-      allowedEmails
-        .map(e => e.trim().toLowerCase())
-        .filter(Boolean)
-    ));
-    const mandatory = ['klrmuhsin809@gmail.com', 'yoonuschr@gmail.com'];
-    const other = unique.filter(e => !mandatory.includes(e));
-    setWhitelistedEmails([...mandatory, ...other]);
-  }, [sheetName, sheetTagline, treasurerName, treasurerEmail, academicYear, logoIcon, allowedEmails]);
+  }, [sheetName, sheetTagline, treasurerName, treasurerEmail, academicYear, logoIcon]);
 
   const handleSelectEmblem = (id: string) => {
     setTempLogoIcon(id);
@@ -171,22 +158,6 @@ export function SidebarProfileFolder({
     }
   };
 
-  const handleAddEmailSlot = () => {
-    setWhitelistedEmails(prev => [...prev, '']);
-  };
-
-  const handleUpdateEmailSlot = (index: number, val: string) => {
-    setWhitelistedEmails(prev => {
-      const copy = [...prev];
-      copy[index] = val;
-      return copy;
-    });
-  };
-
-  const handleRemoveEmailSlot = (index: number) => {
-    setWhitelistedEmails(prev => prev.filter((_, idx) => idx !== index));
-  };
-
   const handleSaveProfile = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!isEditor) {
@@ -197,16 +168,6 @@ export function SidebarProfileFolder({
     setIsSaving(true);
     setSaveError(null);
 
-    const cleanedEmails: string[] = Array.from(new Set<string>(
-      whitelistedEmails
-        .map(email => email.trim().toLowerCase())
-        .filter(Boolean)
-    ));
-    
-    const mandatory = ['klrmuhsin809@gmail.com', 'yoonuschr@gmail.com'];
-    const other = cleanedEmails.filter(e => !mandatory.includes(e));
-    const finalEmails = [...mandatory, ...other];
-
     try {
       await onSaveConfig({
         sheetName: tempSheetName,
@@ -214,7 +175,7 @@ export function SidebarProfileFolder({
         treasurerName: tempTreasurerName,
         treasurerEmail: tempTreasurerEmail,
         academicYear: tempAcademicYear,
-        allowedEmails: finalEmails,
+        allowedEmails: allowedEmails,
         logoIcon: tempLogoIcon
       });
       setSaveSuccess(true);
@@ -298,10 +259,6 @@ export function SidebarProfileFolder({
             <div className="min-w-0 flex-1">
               <div className="text-xs font-bold text-gray-800 group-hover:text-indigo-600 transition-colors truncate">
                 {tempSheetName || 'Class Union Ledger'}
-              </div>
-              <div className="text-[11px] text-indigo-600 font-medium flex items-center gap-1 mt-0.5">
-                <Camera size={12} />
-                <span>{showPhotoOptions ? 'Close photo options' : 'Click to edit photo / emblem'}</span>
               </div>
             </div>
 
@@ -468,57 +425,6 @@ export function SidebarProfileFolder({
           </div>
         </div>
 
-        {/* Role-Based Access Control / Whitelisted Editors */}
-        <div className="pt-2.5 border-t border-gray-150">
-          <div className="flex items-center justify-between mb-2">
-            <div className="flex items-center gap-2 text-sm font-bold text-gray-800 tracking-normal">
-              <ShieldAlert size={16} className="text-indigo-600 shrink-0" />
-              <span>Whitelisted Editors ({Math.max(0, whitelistedEmails.length - 2)})</span>
-            </div>
-            {isSuperAdmin && (
-              <button
-                type="button"
-                onClick={handleAddEmailSlot}
-                className="text-[10px] font-bold text-indigo-600 hover:text-indigo-800 flex items-center gap-0.5 cursor-pointer"
-              >
-                <Plus size={11} />
-                <span>Add Slot</span>
-              </button>
-            )}
-          </div>
-
-          <div className="space-y-1.5 max-h-36 overflow-y-auto pr-1">
-            {whitelistedEmails.map((email, idx) => {
-              if (idx === 0 || idx === 1) return null;
-              return (
-                <div key={idx} className="flex items-center gap-1.5">
-                  <input
-                    type="email"
-                    required
-                    value={email}
-                    disabled={!isSuperAdmin}
-                    onChange={(e) => handleUpdateEmailSlot(idx, e.target.value)}
-                    placeholder="editor@gmail.com"
-                    className="flex-1 px-2 py-1 text-[11px] border border-gray-250 rounded-md font-mono text-gray-700 focus:ring-1 focus:ring-indigo-500 focus:outline-none disabled:bg-gray-100"
-                  />
-                  {isSuperAdmin && (
-                    <button
-                      type="button"
-                      onClick={() => handleRemoveEmailSlot(idx)}
-                      className="p-1 text-gray-400 hover:text-rose-600 cursor-pointer"
-                    >
-                      <Trash2 size={12} />
-                    </button>
-                  )}
-                </div>
-              );
-            })}
-            {whitelistedEmails.length <= 2 && (
-              <p className="text-[10px] text-gray-400 italic">No extra editors added. Primary admins are active.</p>
-            )}
-          </div>
-        </div>
-
         {/* Feedback notices */}
         {saveSuccess && (
           <div className="text-[11px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 p-2 rounded-lg flex items-center gap-1.5 animate-fade-in">
@@ -550,15 +456,6 @@ export function SidebarProfileFolder({
                 <span>Save Profile Changes</span>
               </>
             )}
-          </button>
-
-          <button
-            type="button"
-            onClick={onOpenFullSettings}
-            className="w-full py-1.5 px-3 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-[11px] font-semibold transition-colors flex items-center justify-center gap-1.5 cursor-pointer"
-          >
-            <ExternalLink size={12} />
-            <span>Open Full Settings & Database Tab</span>
           </button>
         </div>
       </form>
