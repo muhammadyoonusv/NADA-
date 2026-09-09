@@ -24,13 +24,17 @@ export function NotificationCenter({ notifications, onMarkAllAsRead, onClearAll,
   const unreadCount = notifications.filter(n => !n.read).length;
 
   useEffect(() => {
-    function handleClickOutside(event: MouseEvent) {
+    function handleClickOutside(event: MouseEvent | TouchEvent) {
       if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
         setIsOpen(false);
       }
     }
     document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
+    document.addEventListener('touchstart', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener('touchstart', handleClickOutside);
+    };
   }, []);
 
   const formatTime = (ts: number) => {
@@ -72,45 +76,61 @@ export function NotificationCenter({ notifications, onMarkAllAsRead, onClearAll,
 
       <AnimatePresence>
         {isOpen && (
-          <motion.div
-            initial={{ opacity: 0, y: 10, scale: 0.95 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: 10, scale: 0.95 }}
-            transition={{ duration: 0.2, ease: "easeOut" }}
-            className="absolute right-0 mt-2 w-80 bg-white rounded-xl shadow-xl border border-gray-100 overflow-hidden z-50 flex flex-col max-h-[28rem]"
-          >
-            <div className="p-3 border-b border-gray-100 flex items-center justify-between bg-slate-50">
-              <h3 className="font-semibold text-sm text-slate-800 flex items-center gap-1.5">
-                <Bell size={14} className="text-slate-500" />
-                Notifications
-              </h3>
-              <div className="flex items-center gap-2">
-                {unreadCount > 0 && (
-                  <button
-                    onClick={onMarkAllAsRead}
-                    title="Mark all as read"
-                    className="p-1 hover:bg-slate-200 rounded text-slate-500 hover:text-slate-800 transition-colors"
-                  >
-                    <CheckSquare size={14} />
-                  </button>
-                )}
-                {notifications.length > 0 && (
-                  <button
-                    onClick={onClearAll}
-                    title="Clear all"
-                    className="p-1 hover:bg-rose-100 rounded text-rose-500 hover:text-rose-700 transition-colors"
-                  >
-                    <Trash2 size={14} />
-                  </button>
-                )}
-                <button
-                  onClick={() => setIsOpen(false)}
-                  className="p-1 hover:bg-slate-200 rounded text-slate-500 hover:text-slate-800 transition-colors"
-                >
-                  <X size={14} />
-                </button>
+          <>
+            {/* Mobile Android Backdrop */}
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.15 }}
+              onClick={() => setIsOpen(false)}
+              className="fixed inset-0 bg-slate-900/35 backdrop-blur-xs sm:hidden z-40"
+            />
+
+            <motion.div
+              initial={{ opacity: 0, y: -8, scale: 0.96 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: -8, scale: 0.96 }}
+              transition={{ duration: 0.2, ease: "easeOut" }}
+              className="fixed left-3 right-3 top-18 sm:absolute sm:left-auto sm:right-0 sm:top-full sm:mt-2 w-auto sm:w-85 max-w-md sm:max-w-none bg-white rounded-2xl sm:rounded-xl shadow-2xl sm:shadow-xl border border-gray-200/80 overflow-hidden z-50 flex flex-col max-h-[calc(100vh-7rem)] sm:max-h-[28rem]"
+            >
+              {/* Android Touch Pull/Drag Handle */}
+              <div className="sm:hidden pt-2.5 pb-1 flex justify-center bg-slate-50 border-b border-gray-100">
+                <div className="w-10 h-1 bg-slate-300 rounded-full" />
               </div>
-            </div>
+
+              <div className="p-3 border-b border-gray-100 flex items-center justify-between bg-slate-50">
+                <h3 className="font-semibold text-sm text-slate-800 flex items-center gap-1.5">
+                  <Bell size={14} className="text-slate-500" />
+                  Notifications
+                </h3>
+                <div className="flex items-center gap-1.5 sm:gap-2">
+                  {unreadCount > 0 && (
+                    <button
+                      onClick={onMarkAllAsRead}
+                      title="Mark all as read"
+                      className="p-1.5 sm:p-1 hover:bg-slate-200 rounded-md text-slate-500 hover:text-slate-800 transition-colors"
+                    >
+                      <CheckSquare size={15} />
+                    </button>
+                  )}
+                  {notifications.length > 0 && (
+                    <button
+                      onClick={onClearAll}
+                      title="Clear all"
+                      className="p-1.5 sm:p-1 hover:bg-rose-100 rounded-md text-rose-500 hover:text-rose-700 transition-colors"
+                    >
+                      <Trash2 size={15} />
+                    </button>
+                  )}
+                  <button
+                    onClick={() => setIsOpen(false)}
+                    className="p-1.5 sm:p-1 hover:bg-slate-200 rounded-md text-slate-500 hover:text-slate-800 transition-colors"
+                  >
+                    <X size={16} />
+                  </button>
+                </div>
+              </div>
 
             <div className="overflow-y-auto flex-1 p-1 bg-white">
               {notifications.length === 0 ? (
@@ -163,6 +183,7 @@ export function NotificationCenter({ notifications, onMarkAllAsRead, onClearAll,
               </div>
             )}
           </motion.div>
+          </>
         )}
       </AnimatePresence>
     </div>

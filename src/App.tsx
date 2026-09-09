@@ -2015,7 +2015,7 @@ export default function App() {
       {/* Elegant Native Toast Notifications for a pristine iframe-safe UX */}
       {toast && (
         <div 
-          className={`fixed bottom-5 right-5 z-[100] flex items-center gap-3 px-4 py-3 rounded-xl border shadow-lg max-w-sm backdrop-blur-md transition-all duration-300 animate-in fade-in slide-in-from-bottom-5 ${
+          className={`fixed bottom-20 sm:bottom-5 left-3 right-3 sm:left-auto sm:right-5 z-[100] flex items-center gap-3 px-4 py-3 rounded-xl border shadow-lg sm:max-w-sm backdrop-blur-md transition-all duration-300 animate-in fade-in slide-in-from-bottom-5 ${
             toast.type === 'success' 
               ? 'bg-emerald-550 border-emerald-200 bg-emerald-50 text-emerald-800' 
               : toast.type === 'err'
