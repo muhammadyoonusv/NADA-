@@ -8,7 +8,7 @@ import { jsPDF } from 'jspdf';
 import html2canvas from 'html2canvas-pro';
 import { Account, JournalEntry, Student, Program, AccountType } from '../types';
 import { FilePlus2, Trash2, Download, Upload, RefreshCcw, Search, PlusCircle, Sparkles, Filter, Info, Edit, ArrowDownUp, Printer, ShieldCheck, FileCheck, CheckCircle2, Paperclip, File, Eye, X, ExternalLink, FileText } from 'lucide-react';
-import { getTrialBalance, getReceiptsAndPaymentsSum, getBalanceSheet, getIncomeAndExpenditure, getAccountBalances } from '../utils/accounting';
+import { getTrialBalance, getReceiptsAndPaymentsSum, getBalanceSheet, getIncomeAndExpenditure, getAccountBalances, resolveAccountName } from '../utils/accounting';
 
 interface JournalSheetProps {
   accounts: Account[];
@@ -19,6 +19,7 @@ interface JournalSheetProps {
   onAddEntry: (entry: Omit<JournalEntry, 'id'>) => Promise<boolean>;
   onUpdateEntry: (entry: JournalEntry) => Promise<boolean>;
   onDeleteEntry: (id: string) => void;
+  onAddAccount?: (newAccount: Omit<Account, 'id'>) => Promise<string | undefined>;
   onLoadPresets: () => void;
   onClearAll: () => void;
   onImportBackup: (data: string) => boolean | Promise<boolean>;
@@ -100,6 +101,7 @@ export function JournalSheet({
   onAddEntry,
   onUpdateEntry,
   onDeleteEntry,
+  onAddAccount,
   onLoadPresets,
   onClearAll,
   onImportBackup,
@@ -125,7 +127,7 @@ export function JournalSheet({
   const [editingEntry, setEditingEntry] = useState<JournalEntry | null>(null);
   const [deletingEntryId, setDeletingEntryId] = useState<string | null>(null);
   const [isPdfModalOpen, setIsPdfModalOpen] = useState(false);
-  const [selectedPdfView, setSelectedPdfView] = useState<'combined' | 'journal' | 'trial' | 'receipts' | 'expenditure' | 'balance'>('combined');
+  const [selectedPdfView, setSelectedPdfView] = useState<'all' | 'combined' | 'journal' | 'trial' | 'receipts' | 'expenditure' | 'balance'>('combined');
   const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
 
   const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
@@ -153,7 +155,7 @@ export function JournalSheet({
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
 
   // File Attachments States
-  const [attachedFiles, setAttachedFiles] = useState<Array<{ name: string; type: string; size: number; base64: string }>>([]);
+  const [attachedFiles, setAttachedFiles] = useState<Array<{ name: string; type: string; size: number; base64?: string; id?: string; chunkCount?: number }>>([]);
   const [isDragging, setIsDragging] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [selectedPreviewEntry, setSelectedPreviewEntry] = useState<JournalEntry | null>(null);
@@ -456,8 +458,8 @@ export function JournalSheet({
     csvContent += "ID,Date,Debit Account,Credit Account,Amount,Narration\n";
 
     entries.forEach((entry) => {
-      const Dr = accounts.find((a) => a.id === entry.debitAccount)?.name || 'Unknown';
-      const Cr = accounts.find((a) => a.id === entry.creditAccount)?.name || 'Unknown';
+      const Dr = resolveAccountName(entry.debitAccount, accounts);
+      const Cr = resolveAccountName(entry.creditAccount, accounts);
       const row = `"${entry.id}","${entry.date}","${Dr}","${Cr}",${entry.amount},"${entry.narration.replace(/"/g, '""')}"`;
       csvContent += row + "\n";
     });
@@ -473,8 +475,8 @@ export function JournalSheet({
 
   // Filter entries
   const filteredEntries = entries.filter((entry) => {
-    const drName = accounts.find((a) => a.id === entry.debitAccount)?.name || '';
-    const crName = accounts.find((a) => a.id === entry.creditAccount)?.name || '';
+    const drName = resolveAccountName(entry.debitAccount, accounts);
+    const crName = resolveAccountName(entry.creditAccount, accounts);
     const matchSearch =
       entry.narration.toLowerCase().includes(searchTerm.toLowerCase()) ||
       drName.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -665,8 +667,8 @@ export function JournalSheet({
             <table className="w-full text-left border-collapse font-serif text-sm">
               <tbody className="font-sans divide-y divide-gray-100">
                 {sortedEntries.map((entry, index) => {
-                  const drAccName = accounts.find((a) => a.id === entry.debitAccount)?.name || 'Unknown Account';
-                  const crAccName = accounts.find((a) => a.id === entry.creditAccount)?.name || 'Unknown Account';
+                  const drAccName = resolveAccountName(entry.debitAccount, accounts);
+                  const crAccName = resolveAccountName(entry.creditAccount, accounts);
 
                   return (
                     <tr key={entry.id} className="hover:bg-blue-50/50 transition-colors group">
@@ -685,7 +687,7 @@ export function JournalSheet({
                         {entry.isCompound ? (
                           <div className="space-y-1">
                             {entry.debits?.map((db, idx) => {
-                              const name = accounts.find((a) => a.id === db.accountId)?.name || 'Unknown';
+                              const name = resolveAccountName(db.accountId, accounts);
                               return (
                                 <div key={idx} className="px-2 py-1 bg-emerald-50 text-emerald-800 text-[11px] font-semibold rounded-md flex items-center justify-between gap-1">
                                   <span className="truncate">{name}</span>
@@ -707,7 +709,7 @@ export function JournalSheet({
                         {entry.isCompound ? (
                           <div className="space-y-1 ml-2">
                             {entry.credits?.map((cr, idx) => {
-                              const name = accounts.find((a) => a.id === cr.accountId)?.name || 'Unknown';
+                              const name = resolveAccountName(cr.accountId, accounts);
                               return (
                                 <div key={idx} className="px-2 py-1 bg-rose-50 text-rose-800 text-[11px] font-semibold rounded-md flex items-center justify-between gap-1">
                                   <span className="truncate">{name}</span>
@@ -900,23 +902,30 @@ export function JournalSheet({
                       <div className="space-y-2">
                         {compDebits.map((db, idx) => (
                           <div key={idx} className="flex gap-2 items-center">
-                            <select
-                              required
+                            <AccountCreatableSelect
+                              accounts={accounts}
                               value={db.accountId}
-                              onChange={(e) => {
-                                const val = e.target.value;
+                              colorTheme="emerald"
+                              defaultTypeForNew="Expense"
+                              placeholder="Select or enter debit account..."
+                              onAddNewAccount={async (name, type) => {
+                                if (onAddAccount) {
+                                  return await onAddAccount({
+                                    name,
+                                    type,
+                                    category: type === 'Expense' ? 'Expenses' : type === 'Asset' ? 'Liquid Assets' : 'General',
+                                    description: `Auto-created during entry posting`
+                                  });
+                                }
+                                return undefined;
+                              }}
+                              onChange={(val, accType) => {
                                 const updated = [...compDebits];
                                 updated[idx].accountId = val;
-                                updated[idx].type = accounts.find(a => a.id === val)?.type || 'Asset';
+                                updated[idx].type = accType || accounts.find(a => a.id === val)?.type || 'Asset';
                                 setCompDebits(updated);
                               }}
-                              className="flex-1 px-2.5 py-1.5 border border-gray-200 bg-white rounded-lg text-xs focus:ring-2 focus:ring-emerald-500 focus:outline-none"
-                            >
-                              <option value="" disabled>Select debit account...</option>
-                              {accounts.map((acc) => (
-                                <option key={acc.id} value={acc.id}>{acc.name} ({acc.type})</option>
-                              ))}
-                            </select>
+                            />
                             {db.accountId && (
                               <select
                                 value={db.type || accounts.find(a => a.id === db.accountId)?.type || 'Asset'}
@@ -925,7 +934,7 @@ export function JournalSheet({
                                   updated[idx].type = e.target.value as AccountType;
                                   setCompDebits(updated);
                                 }}
-                                className="px-1.5 py-1.5 border border-emerald-100 bg-emerald-50 text-emerald-800 text-[10px] font-bold rounded-lg focus:outline-none"
+                                className="px-1.5 py-1.5 border border-emerald-100 bg-emerald-50 text-emerald-800 text-[10px] font-bold rounded-lg focus:outline-none shrink-0"
                               >
                                 <option value="Asset">Asset</option>
                                 <option value="Liability">Liability</option>
@@ -946,13 +955,13 @@ export function JournalSheet({
                                 updated[idx].amount = e.target.value;
                                 setCompDebits(updated);
                               }}
-                              className="w-28 px-2.5 py-1.5 border border-gray-200 bg-white rounded-lg text-xs font-mono focus:ring-2 focus:ring-emerald-500 focus:outline-none"
+                              className="w-24 md:w-28 px-2.5 py-1.5 border border-gray-200 bg-white rounded-lg text-xs font-mono focus:ring-2 focus:ring-emerald-500 focus:outline-none shrink-0"
                             />
                             {compDebits.length > 1 && (
                               <button
                                 type="button"
                                 onClick={() => setCompDebits(compDebits.filter((_, i) => i !== idx))}
-                                className="text-rose-500 hover:text-rose-700 p-1 cursor-pointer"
+                                className="text-rose-500 hover:text-rose-700 p-1 cursor-pointer shrink-0"
                               >
                                 <Trash2 size={13} />
                               </button>
@@ -977,23 +986,30 @@ export function JournalSheet({
                       <div className="space-y-2">
                         {compCredits.map((cr, idx) => (
                           <div key={idx} className="flex gap-2 items-center">
-                            <select
-                              required
+                            <AccountCreatableSelect
+                              accounts={accounts}
                               value={cr.accountId}
-                              onChange={(e) => {
-                                const val = e.target.value;
+                              colorTheme="rose"
+                              defaultTypeForNew="Income"
+                              placeholder="Select or enter credit account..."
+                              onAddNewAccount={async (name, type) => {
+                                if (onAddAccount) {
+                                  return await onAddAccount({
+                                    name,
+                                    type,
+                                    category: type === 'Income' ? 'Revenue' : type === 'Liability' ? 'Payables' : 'General',
+                                    description: `Auto-created during entry posting`
+                                  });
+                                }
+                                return undefined;
+                              }}
+                              onChange={(val, accType) => {
                                 const updated = [...compCredits];
                                 updated[idx].accountId = val;
-                                updated[idx].type = accounts.find(a => a.id === val)?.type || 'Liability';
+                                updated[idx].type = accType || accounts.find(a => a.id === val)?.type || 'Liability';
                                 setCompCredits(updated);
                               }}
-                              className="flex-1 px-2.5 py-1.5 border border-gray-200 bg-white rounded-lg text-xs focus:ring-2 focus:ring-rose-500 focus:outline-none"
-                            >
-                              <option value="" disabled>Select credit account...</option>
-                              {accounts.map((acc) => (
-                                <option key={acc.id} value={acc.id}>{acc.name} ({acc.type})</option>
-                              ))}
-                            </select>
+                            />
                             {cr.accountId && (
                               <select
                                 value={cr.type || accounts.find(a => a.id === cr.accountId)?.type || 'Liability'}
@@ -1002,7 +1018,7 @@ export function JournalSheet({
                                   updated[idx].type = e.target.value as AccountType;
                                   setCompCredits(updated);
                                 }}
-                                className="px-1.5 py-1.5 border border-rose-100 bg-rose-50 text-rose-800 text-[10px] font-bold rounded-lg focus:outline-none"
+                                className="px-1.5 py-1.5 border border-rose-100 bg-rose-50 text-rose-800 text-[10px] font-bold rounded-lg focus:outline-none shrink-0"
                               >
                                 <option value="Asset">Asset</option>
                                 <option value="Liability">Liability</option>
@@ -1023,13 +1039,13 @@ export function JournalSheet({
                                 updated[idx].amount = e.target.value;
                                 setCompCredits(updated);
                               }}
-                              className="w-28 px-2.5 py-1.5 border border-gray-200 bg-white rounded-lg text-xs font-mono focus:ring-2 focus:ring-rose-500 focus:outline-none"
+                              className="w-24 md:w-28 px-2.5 py-1.5 border border-gray-200 bg-white rounded-lg text-xs font-mono focus:ring-2 focus:ring-rose-500 focus:outline-none shrink-0"
                             />
                             {compCredits.length > 1 && (
                               <button
                                 type="button"
                                 onClick={() => setCompCredits(compCredits.filter((_, i) => i !== idx))}
-                                className="text-rose-500 hover:text-rose-700 p-1 cursor-pointer"
+                                className="text-rose-500 hover:text-rose-700 p-1 cursor-pointer shrink-0"
                               >
                                 <Trash2 size={13} />
                               </button>
@@ -1103,24 +1119,29 @@ export function JournalSheet({
 
                   <div>
                     <label className="block text-xs font-semibold text-gray-600 uppercase mb-1">DEBIT ACCOUNT (Where money/value goes)</label>
-                    <select
-                      required
+                    <AccountCreatableSelect
+                      accounts={accounts}
                       value={debitAccount}
-                      onChange={(e) => {
-                        const val = e.target.value;
+                      colorTheme="emerald"
+                      defaultTypeForNew="Expense"
+                      placeholder="Select or enter debit account..."
+                      onAddNewAccount={async (name, type) => {
+                        if (onAddAccount) {
+                          return await onAddAccount({
+                            name,
+                            type,
+                            category: type === 'Expense' ? 'Expenses' : type === 'Asset' ? 'Liquid Assets' : 'General',
+                            description: `Auto-created during entry posting`
+                          });
+                        }
+                        return undefined;
+                      }}
+                      onChange={(val, accType) => {
                         setDebitAccount(val);
-                        const matchType = accounts.find((a) => a.id === val)?.type || '';
+                        const matchType = accType || accounts.find((a) => a.id === val)?.type || 'Asset';
                         setDebitAccountType(matchType as AccountType);
                       }}
-                      className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none focus:border-blue-500"
-                    >
-                      <option value="" disabled>Select target debit account...</option>
-                      {accounts.map((acc) => (
-                        <option key={acc.id} value={acc.id}>
-                          {acc.name} ({acc.type})
-                        </option>
-                      ))}
-                    </select>
+                    />
                     {debitAccount && (
                       <div className="mt-1.5 flex items-center justify-between bg-emerald-50/50 p-2 rounded-lg border border-emerald-100 no-print">
                         <span className="text-[10px] text-emerald-800 font-semibold font-sans">
@@ -1149,24 +1170,29 @@ export function JournalSheet({
 
                   <div>
                     <label className="block text-xs font-semibold text-gray-600 uppercase mb-1">CREDIT ACCOUNT (Where money/value comes from)</label>
-                    <select
-                      required
+                    <AccountCreatableSelect
+                      accounts={accounts}
                       value={creditAccount}
-                      onChange={(e) => {
-                        const val = e.target.value;
+                      colorTheme="rose"
+                      defaultTypeForNew="Income"
+                      placeholder="Select or enter credit account..."
+                      onAddNewAccount={async (name, type) => {
+                        if (onAddAccount) {
+                          return await onAddAccount({
+                            name,
+                            type,
+                            category: type === 'Income' ? 'Revenue' : type === 'Liability' ? 'Payables' : 'General',
+                            description: `Auto-created during entry posting`
+                          });
+                        }
+                        return undefined;
+                      }}
+                      onChange={(val, accType) => {
                         setCreditAccount(val);
-                        const matchType = accounts.find((a) => a.id === val)?.type || '';
+                        const matchType = accType || accounts.find((a) => a.id === val)?.type || 'Liability';
                         setCreditAccountType(matchType as AccountType);
                       }}
-                      className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none focus:border-blue-500"
-                    >
-                      <option value="" disabled>Select counter credit account...</option>
-                      {accounts.map((acc) => (
-                        <option key={acc.id} value={acc.id}>
-                          {acc.name} ({acc.type})
-                        </option>
-                      ))}
-                    </select>
+                    />
                     {creditAccount && (
                       <div className="mt-1.5 flex items-center justify-between bg-rose-50/50 p-2 rounded-lg border border-rose-100 no-print">
                         <span className="text-[10px] text-rose-800 font-semibold font-sans">
@@ -1974,8 +2000,8 @@ export function JournalSheet({
                               </tr>
                             ) : (
                               entries.map((entry) => {
-                                const dr = accounts.find(a => a.id === entry.debitAccount)?.name || 'Unknown Ledger';
-                                const cr = accounts.find(a => a.id === entry.creditAccount)?.name || 'Unknown Ledger';
+                                const dr = resolveAccountName(entry.debitAccount, accounts);
+                                const cr = resolveAccountName(entry.creditAccount, accounts);
                                 return (
                                   <tr key={entry.id} className="border-b border-slate-200 hover:bg-slate-50 font-sans leading-tight">
                                     <td className="py-1 px-2 border-r border-slate-200 font-mono">{entry.date}</td>
@@ -2556,6 +2582,232 @@ export function JournalSheet({
           </div>
         );
       })()}
+    </div>
+  );
+}
+
+// Searchable & Creatable Account Select component for manual ledger entry forms
+interface AccountCreatableSelectProps {
+  accounts: Account[];
+  value: string;
+  onChange: (accountId: string, type?: AccountType) => void;
+  onAddNewAccount?: (name: string, type: AccountType) => Promise<string | undefined>;
+  placeholder?: string;
+  colorTheme?: 'emerald' | 'rose' | 'blue';
+  defaultTypeForNew?: AccountType;
+  required?: boolean;
+}
+
+function AccountCreatableSelect({
+  accounts,
+  value,
+  onChange,
+  onAddNewAccount,
+  placeholder = "Search or select account...",
+  colorTheme = 'blue',
+  defaultTypeForNew = 'Expense',
+  required = false,
+}: AccountCreatableSelectProps) {
+  const [isOpen, setIsOpen] = useState(false);
+  const [query, setQuery] = useState('');
+  const [isCreating, setIsCreating] = useState(false);
+  const [newAccType, setNewAccType] = useState<AccountType>(defaultTypeForNew);
+  const [submittingNew, setSubmittingNew] = useState(false);
+
+  // Derive active selected account
+  const selectedAcc = accounts.find(a => a.id === value);
+  const displayText = selectedAcc ? `${selectedAcc.name} (${selectedAcc.type})` : (value ? resolveAccountName(value, accounts) : '');
+
+  const filteredAccounts = accounts.filter(acc => 
+    acc.name.toLowerCase().includes(query.toLowerCase()) || 
+    acc.type.toLowerCase().includes(query.toLowerCase())
+  );
+
+  const exactMatch = accounts.some(a => a.name.trim().toLowerCase() === query.trim().toLowerCase());
+
+  const handleSelect = (acc: Account) => {
+    onChange(acc.id, acc.type);
+    setIsOpen(false);
+    setQuery('');
+    setIsCreating(false);
+  };
+
+  const handleCreateNew = async (e?: React.MouseEvent) => {
+    if (e) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
+    const cleanName = query.trim();
+    if (!cleanName) return;
+
+    if (onAddNewAccount) {
+      setSubmittingNew(true);
+      try {
+        const createdId = await onAddNewAccount(cleanName, newAccType);
+        if (createdId) {
+          onChange(createdId, newAccType);
+        } else {
+          // Fallback if ID wasn't returned
+          onChange(cleanName, newAccType);
+        }
+      } catch (err) {
+        console.error("Failed to auto-create account:", err);
+        onChange(cleanName, newAccType);
+      } finally {
+        setSubmittingNew(false);
+        setIsCreating(false);
+        setIsOpen(false);
+        setQuery('');
+      }
+    } else {
+      onChange(cleanName, newAccType);
+      setIsCreating(false);
+      setIsOpen(false);
+      setQuery('');
+    }
+  };
+
+  const ringFocusClass = colorTheme === 'emerald' 
+    ? 'focus:ring-emerald-500 focus:border-emerald-500' 
+    : colorTheme === 'rose' 
+    ? 'focus:ring-rose-500 focus:border-rose-500' 
+    : 'focus:ring-blue-500 focus:border-blue-500';
+
+  const badgeBgClass = colorTheme === 'emerald'
+    ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
+    : colorTheme === 'rose'
+    ? 'bg-rose-50 text-rose-800 border-rose-200'
+    : 'bg-blue-50 text-blue-800 border-blue-200';
+
+  return (
+    <div className="relative flex-1">
+      <div
+        onClick={() => {
+          setIsOpen(!isOpen);
+          if (!isOpen) {
+            setIsCreating(false);
+            setQuery('');
+          }
+        }}
+        className={`w-full min-h-[38px] px-3 py-2 border border-gray-200 bg-white rounded-lg text-xs md:text-sm cursor-pointer flex items-center justify-between gap-2 shadow-2xs hover:border-gray-300 transition-colors ${
+          isOpen ? 'ring-2 ring-blue-500 border-blue-500' : ''
+        }`}
+      >
+        <span className={displayText ? 'text-gray-900 font-medium truncate' : 'text-gray-400 font-normal truncate'}>
+          {displayText || placeholder}
+        </span>
+        <div className="flex items-center gap-1.5 shrink-0">
+          {selectedAcc && (
+            <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold uppercase border ${badgeBgClass}`}>
+              {selectedAcc.type}
+            </span>
+          )}
+          <span className="text-gray-400 text-xs select-none">▼</span>
+        </div>
+      </div>
+
+      {isOpen && (
+        <div 
+          className="absolute z-50 left-0 right-0 top-full mt-1 bg-white border border-gray-200 rounded-xl shadow-xl p-2.5 max-h-72 flex flex-col space-y-2 overflow-hidden animate-in fade-in duration-100"
+          onClick={(e) => e.stopPropagation()}
+        >
+          {/* Search bar inside dropdown */}
+          <div className="relative">
+            <input
+              type="text"
+              autoFocus
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Search or enter new account name..."
+              className={`w-full px-2.5 py-1.5 border border-gray-200 rounded-lg text-xs focus:outline-none focus:ring-2 ${ringFocusClass}`}
+            />
+            {query && (
+              <button
+                type="button"
+                onClick={() => setQuery('')}
+                className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 text-xs"
+              >
+                ✕
+              </button>
+            )}
+          </div>
+
+          {/* Quick inline creator if typed name does not exist */}
+          {query.trim().length > 0 && !exactMatch && (
+            <div className="p-2.5 bg-indigo-50/70 border border-indigo-100 rounded-lg space-y-2">
+              <div className="flex items-center justify-between">
+                <div className="text-[11px] font-bold text-indigo-950 flex items-center gap-1">
+                  <Sparkles size={12} className="text-indigo-600" />
+                  <span>Create "{query.trim()}" in Chart of Accounts</span>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-1.5 flex-wrap">
+                <span className="text-[10px] text-gray-500 font-medium">Account Type:</span>
+                {(['Asset', 'Liability', 'Equity', 'Income', 'Expense'] as AccountType[]).map((t) => (
+                  <button
+                    key={t}
+                    type="button"
+                    onClick={() => setNewAccType(t)}
+                    className={`px-2 py-0.5 rounded text-[10px] font-bold transition-all cursor-pointer ${
+                      newAccType === t
+                        ? 'bg-indigo-600 text-white shadow-xs'
+                        : 'bg-white text-gray-600 hover:bg-gray-100 border border-gray-200'
+                    }`}
+                  >
+                    {t}
+                  </button>
+                ))}
+              </div>
+
+              <button
+                type="button"
+                disabled={submittingNew}
+                onClick={handleCreateNew}
+                className="w-full py-1.5 px-3 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white text-xs font-bold rounded-lg transition-colors flex items-center justify-center gap-1.5 cursor-pointer shadow-xs"
+              >
+                <PlusCircle size={13} />
+                {submittingNew ? 'Adding to Chart of Accounts...' : `Add "${query.trim()}" as ${newAccType}`}
+              </button>
+            </div>
+          )}
+
+          {/* List of existing matching accounts */}
+          <div className="overflow-y-auto max-h-40 divide-y divide-gray-50 flex-1">
+            {filteredAccounts.length === 0 ? (
+              <div className="p-3 text-center text-xs text-gray-400">
+                {query ? 'No matching account found. Use button above to create it.' : 'No accounts available.'}
+              </div>
+            ) : (
+              filteredAccounts.map((acc) => (
+                <button
+                  key={acc.id}
+                  type="button"
+                  onClick={() => handleSelect(acc)}
+                  className={`w-full text-left px-2.5 py-1.5 rounded-lg text-xs flex items-center justify-between hover:bg-slate-100 transition-colors cursor-pointer ${
+                    value === acc.id ? 'bg-blue-50 font-bold text-blue-900' : 'text-gray-800'
+                  }`}
+                >
+                  <span className="truncate">{acc.name}</span>
+                  <span className="text-[10px] px-1.5 py-0.5 rounded bg-gray-100 text-gray-600 font-medium shrink-0 ml-2">
+                    {acc.type}
+                  </span>
+                </button>
+              ))
+            )}
+          </div>
+
+          <div className="pt-1 border-t border-gray-100 flex justify-end">
+            <button
+              type="button"
+              onClick={() => setIsOpen(false)}
+              className="text-[11px] text-gray-500 hover:text-gray-700 px-2 py-0.5 rounded"
+            >
+              Close
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

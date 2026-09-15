@@ -22,6 +22,7 @@ import { SidebarProfileFolder } from './components/SidebarProfileFolder';
 import { ProfilePageView } from './components/ProfilePageView';
 import { QuickTemplatesPageView } from './components/QuickTemplatesPageView';
 import { PrivacySecurityView } from './components/PrivacySecurityView';
+import { AIChatBot } from './components/AIChatBot';
 import { Users as UsersIcon } from 'lucide-react';
 import {
   collection,
@@ -150,14 +151,15 @@ export default function App() {
             } catch (e) {}
             const isRead = readIds.includes(change.doc.id);
 
-            return [{
+            const notifType: 'info' | 'success' | 'err' = data.type === 'success' ? 'success' : data.type === 'err' ? 'err' : 'info';
+            const newNotif: AppNotification = {
               id: change.doc.id,
               message: data.message,
-              // Treat these external updates as 'info' or map from 'type'
-              type: data.type === 'success' ? 'success' : 'info',
+              type: notifType,
               timestamp: data.timestamp,
               read: isRead
-            }, ...prev].sort((a, b) => b.timestamp - a.timestamp);
+            };
+            return [newNotif, ...prev].sort((a, b) => b.timestamp - a.timestamp);
           });
         }
       });
@@ -282,10 +284,38 @@ export default function App() {
             handleFirestoreError(err, OperationType.WRITE, 'accounts');
           }
         } else {
-          setAccounts([]);
+          setAccounts(DEFAULT_ACCOUNTS);
           setLoadingAccounts(false);
         }
       } else {
+        // Ensure all DEFAULT_ACCOUNTS (e.g. Donation Account id: 12) exist in the list!
+        const existingMap = new Map<string, Account>();
+        list.forEach(a => {
+          existingMap.set(a.id, a);
+          if (a.name) existingMap.set(a.name.toLowerCase().trim(), a);
+        });
+
+        const missingDefaults: Account[] = [];
+        for (const def of DEFAULT_ACCOUNTS) {
+          if (!existingMap.has(def.id) && !existingMap.has(def.name.toLowerCase().trim())) {
+            list.push(def);
+            existingMap.set(def.id, def);
+            missingDefaults.push(def);
+          }
+        }
+
+        if (missingDefaults.length > 0 && isEditor) {
+          try {
+            const batch = writeBatch(db);
+            missingDefaults.forEach(acc => {
+              batch.set(doc(db, 'accounts', acc.id), acc);
+            });
+            batch.commit().catch(err => console.warn('Sync missing default accounts warning:', err));
+          } catch (err) {
+            console.warn('Sync missing default accounts err:', err);
+          }
+        }
+
         setAccounts(list);
         setLoadingAccounts(false);
       }
@@ -811,10 +841,10 @@ export default function App() {
     }
   };
 
-  const handleAddAccount = async (newAccount: Omit<Account, 'id'>) => {
+  const handleAddAccount = async (newAccount: Omit<Account, 'id'>): Promise<string | undefined> => {
     if (!isEditor) {
       showToast('Access denied: You do not have permission to add accounts. Only authorized editors can alter ledger data.', 'err');
-      return;
+      return undefined;
     }
     try {
       const accId = 'acc_' + Date.now() + '_' + Math.random().toString(36).substr(2, 4);
@@ -824,11 +854,13 @@ export default function App() {
         isSystem: false,
       };
       await setDoc(doc(db, 'accounts', accId), acc);
-      showToast('The account label was added successfully.', 'success');
+      showToast(`Account '${newAccount.name}' was added to Chart of Accounts.`, 'success');
+      return accId;
     } catch (error) {
       const errMessage = error instanceof Error ? error.message : String(error);
       showToast('Error adding account label: ' + errMessage, 'err');
       handleFirestoreError(error, OperationType.CREATE, 'accounts');
+      return undefined;
     }
   };
 
@@ -1827,6 +1859,7 @@ export default function App() {
               onAddEntry={handleAddEntry}
               onUpdateEntry={handleUpdateEntry}
               onDeleteEntry={handleDeleteEntry}
+              onAddAccount={handleAddAccount}
               onLoadPresets={onLoadPresets}
               onClearAll={onClearAll}
               onImportBackup={onImportBackup}
@@ -1987,6 +2020,21 @@ export default function App() {
           </p>
         </div>
       </footer>
+
+      {/* Floating AI Accountant Chatbot */}
+      <AIChatBot
+        accounts={accounts}
+        entries={entries}
+        students={students}
+        sheetName={sheetName}
+        treasurerName={treasurerName}
+        academicYear={academicYear}
+        isEditor={isEditor}
+        onAddEntry={handleAddEntry}
+        onAddAccount={handleAddAccount}
+        onNavigateTab={(tab) => setActiveTab(tab as any)}
+        showToast={showToast}
+      />
 
       {/* Confirmation Dialog Component */}
       {confirmDialog?.isOpen && (

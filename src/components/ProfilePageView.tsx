@@ -13,7 +13,15 @@ interface ProfilePageViewProps {
   isEditor: boolean;
   currentUser: any;
   onQuickUpdateLogo: (logo: string) => void;
-  onSaveConfig: (config: any) => Promise<boolean>;
+  onSaveConfig: (config: {
+    sheetName: string;
+    sheetTagline: string;
+    treasurerName: string;
+    treasurerEmail: string;
+    academicYear: string;
+    allowedEmails: string[];
+    logoIcon: string;
+  }) => Promise<void>;
   onNavigateHome: () => void;
   onOpenFullSettings: () => void;
 }

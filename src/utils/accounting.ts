@@ -17,6 +17,7 @@ export const DEFAULT_ACCOUNTS: Account[] = [
   { id: '9', name: 'Union Hall / Stage Rent', type: 'Expense', isSystem: false },
   { id: '10', name: 'Trophies & Banners', type: 'Expense', isSystem: false },
   { id: '11', name: 'Welfare Grant / Charity', type: 'Expense', isSystem: false },
+  { id: '12', name: 'Donation Account', type: 'Income', isSystem: false },
 ];
 
 export const DEFAULT_TRANSACTIONS: JournalEntry[] = [
@@ -79,6 +80,47 @@ export const DEFAULT_TRANSACTIONS: JournalEntry[] = [
 ];
 
 /**
+ * Robustly resolves an account name given an ID or string, matching active accounts,
+ * default accounts, name-based IDs, or cleaned descriptive names.
+ */
+export function resolveAccountName(
+  accountId: string | undefined | null,
+  accounts: Account[] = []
+): string {
+  if (!accountId || typeof accountId !== 'string') return 'General Ledger';
+  const trimmed = accountId.trim();
+  if (!trimmed) return 'General Ledger';
+
+  // 1. Direct ID match in active accounts
+  const found = accounts.find((a) => a.id === trimmed);
+  if (found && found.name) return found.name;
+
+  // 2. Exact or case-insensitive name match in active accounts
+  const matchByName = accounts.find(
+    (a) => a.name.toLowerCase().trim() === trimmed.toLowerCase()
+  );
+  if (matchByName && matchByName.name) return matchByName.name;
+
+  // 3. Fallback match in DEFAULT_ACCOUNTS
+  const defaultFound = DEFAULT_ACCOUNTS.find(
+    (a) => a.id === trimmed || a.name.toLowerCase().trim() === trimmed.toLowerCase()
+  );
+  if (defaultFound && defaultFound.name) return defaultFound.name;
+
+  // 4. If ID is "12" or contains "donation", return "Donation Account"
+  if (trimmed === '12' || trimmed.toLowerCase().includes('donation')) {
+    return 'Donation Account';
+  }
+
+  // 5. If it's a descriptive string (has letters/spaces and not an internal auto-id)
+  if (!trimmed.startsWith('acc_') && (trimmed.includes(' ') || /[a-zA-Z]/.test(trimmed))) {
+    return trimmed;
+  }
+
+  return 'General Account';
+}
+
+/**
  * Calculates current ledger rows for a specific account.
  */
 export function getLedgerForAccount(
@@ -113,7 +155,7 @@ export function getLedgerForAccount(
           runningBalance -= dbSum;
         }
         const otherAccountIds = entry.credits?.map((c) => c.accountId) || [];
-        const otherAccountsStr = otherAccountIds.map((id) => accounts.find((a) => a.id === id)?.name || id).join(', ');
+        const otherAccountsStr = otherAccountIds.map((id) => resolveAccountName(id, accounts)).join(', ');
         ledgerRows.push({
           date: entry.date,
           particulars: `To ${otherAccountsStr || 'Compound'} (Dr)`,
@@ -133,7 +175,7 @@ export function getLedgerForAccount(
           runningBalance += crSum;
         }
         const otherAccountIds = entry.debits?.map((d) => d.accountId) || [];
-        const otherAccountsStr = otherAccountIds.map((id) => accounts.find((a) => a.id === id)?.name || id).join(', ');
+        const otherAccountsStr = otherAccountIds.map((id) => resolveAccountName(id, accounts)).join(', ');
         ledgerRows.push({
           date: entry.date,
           particulars: `By ${otherAccountsStr || 'Compound'} (Cr)`,
@@ -151,7 +193,7 @@ export function getLedgerForAccount(
         } else {
           runningBalance -= entry.amount;
         }
-        const otherAccount = accounts.find((a) => a.id === entry.creditAccount)?.name || 'Unknown Account';
+        const otherAccount = resolveAccountName(entry.creditAccount, accounts);
         ledgerRows.push({
           date: entry.date,
           particulars: `To ${otherAccount} (Dr)`,
@@ -167,7 +209,7 @@ export function getLedgerForAccount(
         } else {
           runningBalance += entry.amount;
         }
-        const otherAccount = accounts.find((a) => a.id === entry.debitAccount)?.name || 'Unknown Account';
+        const otherAccount = resolveAccountName(entry.debitAccount, accounts);
         ledgerRows.push({
           date: entry.date,
           particulars: `By ${otherAccount} (Cr)`,
@@ -345,13 +387,13 @@ export function getReceiptsAndPaymentsSum(
         const nonCbTotal = nonCbCredits.reduce((sum, c) => sum + c.amount, 0);
         if (nonCbTotal > 0) {
           for (const c of nonCbCredits) {
-            const creditsName = accounts.find((a) => a.id === c.accountId)?.name || 'Union Inflows';
+            const creditsName = resolveAccountName(c.accountId, accounts);
             const proportionAmount = (c.amount / nonCbTotal) * totalDrCashBank;
             receiptsMap[creditsName] = (receiptsMap[creditsName] || 0) + proportionAmount;
           }
         } else {
           for (const c of entry.credits || []) {
-            const creditsName = accounts.find((a) => a.id === c.accountId)?.name || 'Union Inflows';
+            const creditsName = resolveAccountName(c.accountId, accounts);
             receiptsMap[creditsName] = (receiptsMap[creditsName] || 0) + c.amount;
           }
         }
@@ -363,13 +405,13 @@ export function getReceiptsAndPaymentsSum(
         const nonCbTotal = nonCbDebits.reduce((sum, d) => sum + d.amount, 0);
         if (nonCbTotal > 0) {
           for (const d of nonCbDebits) {
-            const debitsName = accounts.find((a) => a.id === d.accountId)?.name || 'Union Outflows';
+            const debitsName = resolveAccountName(d.accountId, accounts);
             const proportionAmount = (d.amount / nonCbTotal) * totalCrCashBank;
             paymentsMap[debitsName] = (paymentsMap[debitsName] || 0) + proportionAmount;
           }
         } else {
           for (const d of entry.debits || []) {
-            const debitsName = accounts.find((a) => a.id === d.accountId)?.name || 'Union Outflows';
+            const debitsName = resolveAccountName(d.accountId, accounts);
             paymentsMap[debitsName] = (paymentsMap[debitsName] || 0) + d.amount;
           }
         }
@@ -383,10 +425,10 @@ export function getReceiptsAndPaymentsSum(
       }
 
       if (isDebited) {
-        const creditsName = accounts.find((a) => a.id === entry.creditAccount)?.name || 'Union Inflows';
+        const creditsName = resolveAccountName(entry.creditAccount, accounts);
         receiptsMap[creditsName] = (receiptsMap[creditsName] || 0) + entry.amount;
       } else if (isCredited) {
-        const debitsName = accounts.find((a) => a.id === entry.debitAccount)?.name || 'Union Outflows';
+        const debitsName = resolveAccountName(entry.debitAccount, accounts);
         paymentsMap[debitsName] = (paymentsMap[debitsName] || 0) + entry.amount;
       }
     }

@@ -5,7 +5,7 @@
 
 import React from 'react';
 import { Account, JournalEntry } from '../types';
-import { getAccountBalances } from '../utils/accounting';
+import { getAccountBalances, resolveAccountName } from '../utils/accounting';
 import { 
   Wallet, 
   Landmark, 
@@ -170,8 +170,8 @@ export function HomePage({
               </thead>
               <tbody className="divide-y divide-gray-100 font-sans">
                 {sortedEntries.map((entry, index) => {
-                  const drAccName = accounts.find((a) => a.id === entry.debitAccount)?.name || 'Unknown Account';
-                  const crAccName = accounts.find((a) => a.id === entry.creditAccount)?.name || 'Unknown Account';
+                  const drAccName = resolveAccountName(entry.debitAccount, accounts);
+                  const crAccName = resolveAccountName(entry.creditAccount, accounts);
 
                   return (
                     <tr key={entry.id} className="hover:bg-blue-50/40 transition-colors">
@@ -185,7 +185,7 @@ export function HomePage({
                         {entry.isCompound ? (
                           <div className="space-y-1">
                             {entry.debits?.map((db, idx) => {
-                              const name = accounts.find((a) => a.id === db.accountId)?.name || 'Unknown';
+                              const name = resolveAccountName(db.accountId, accounts);
                               return (
                                 <div key={idx} className="px-2 py-0.5 bg-emerald-50 text-emerald-800 text-[11px] font-semibold rounded flex items-center justify-between gap-1">
                                   <span className="truncate">{name}</span>
@@ -205,7 +205,7 @@ export function HomePage({
                         {entry.isCompound ? (
                           <div className="space-y-1">
                             {entry.credits?.map((cr, idx) => {
-                              const name = accounts.find((a) => a.id === cr.accountId)?.name || 'Unknown';
+                              const name = resolveAccountName(cr.accountId, accounts);
                               return (
                                 <div key={idx} className="px-2 py-0.5 bg-rose-50 text-rose-800 text-[11px] font-semibold rounded flex items-center justify-between gap-1">
                                   <span className="truncate">{name}</span>

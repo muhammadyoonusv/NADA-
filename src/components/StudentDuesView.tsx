@@ -1741,17 +1741,18 @@ export function StudentDuesView({
                         <button
                           type="button"
                           onClick={() => {
-                            const allSelected = filteredRows.length > 0 && filteredRows.every(row => selectedStudentIds.includes(row.student.id));
+                            const getRowStudentId = (row: any) => (row && row.student ? row.student.id : row.id);
+                            const allSelected = filteredRows.length > 0 && filteredRows.every((row: any) => selectedStudentIds.includes(getRowStudentId(row)));
                             if (allSelected) {
                               setSelectedStudentIds([]);
                             } else {
-                              setSelectedStudentIds(filteredRows.map(row => row.student.id));
+                              setSelectedStudentIds(filteredRows.map((row: any) => getRowStudentId(row)));
                             }
                           }}
                           className="text-slate-400 hover:text-indigo-600 transition-colors focus:outline-none flex items-center justify-center mx-auto"
                           title="Select / Deselect all visible student rows"
                         >
-                          {filteredRows.length > 0 && filteredRows.every(row => selectedStudentIds.includes(row.student.id)) ? (
+                          {filteredRows.length > 0 && filteredRows.every((row: any) => selectedStudentIds.includes(row && row.student ? row.student.id : row.id)) ? (
                             <CheckSquare size={14} className="text-indigo-600" />
                           ) : (
                             <Square size={14} />
