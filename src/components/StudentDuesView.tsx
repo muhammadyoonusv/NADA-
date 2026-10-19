@@ -58,7 +58,7 @@ interface StudentDuesViewProps {
   onDeleteProgram: (id: string) => Promise<boolean>;
 }
 
-const MASTER_80_QURAN_STUDENTS = [
+const DEFAULT_CLASS_MEMBERS = [
   "Aditya K. S.", "Aiswarya Lakshmi", "Albin Joseph", "Amal Krishna", "Anagha S. Kumar",
   "Anandhu Rajesh", "Anjali Nair", "Arjun Prasad", "Aswin Ramesh", "Athira Chandran",
   "Devika Nair", "Gautham Krishna", "Hariprasad V.", "Kiran Thomas", "Meenakshi R.",
@@ -144,7 +144,7 @@ export function StudentDuesView({
   // Form states: Master Student Roster
   const [studentId, setStudentId] = useState('');
   const [studentName, setStudentName] = useState('');
-  const [studentClass, setStudentClass] = useState('QURAN DEPARTMENT');
+  const [studentClass, setStudentClass] = useState('Class Member');
   const [studentRemarks, setStudentRemarks] = useState('');
 
   // Form states: Program payment collection
@@ -192,10 +192,29 @@ export function StudentDuesView({
     setSelectedStudentIds([]);
   }, [selectedProgramId, searchTerm, statusFilter, activeView]);
 
-  // Filter master/program students to Quran Department
-  const quranStudentsList = useMemo(() => {
+  // Master list of enrolled class members
+  const classStudentsList = useMemo(() => {
+    // Sanitize any legacy student data to guarantee no Quran/Quran Department data remains
+    const sanitized = students.map(stu => {
+      let newClassName = stu.className;
+      let newRemarks = stu.remarks;
+
+      if (!newClassName || /quran/i.test(newClassName)) {
+        newClassName = 'Class Member';
+      }
+      if (newRemarks && /quran/i.test(newRemarks)) {
+        newRemarks = newRemarks.replace(/quran\s*(department)?\s*(active\s*roster)?/gi, 'Class Member').trim() || 'Class Member';
+      }
+
+      return {
+        ...stu,
+        className: newClassName,
+        remarks: newRemarks
+      };
+    });
+
     // Standardize order - arrange in ascending order of roll number / ID
-    return [...students].sort((a, b) => {
+    return [...sanitized].sort((a, b) => {
       const numA = parseInt(a.id.replace(/\D/g, ''), 10);
       const numB = parseInt(b.id.replace(/\D/g, ''), 10);
       if (!isNaN(numA) && !isNaN(numB)) {
@@ -204,6 +223,31 @@ export function StudentDuesView({
       return a.id.localeCompare(b.id, undefined, { numeric: true });
     });
   }, [students]);
+
+  // Silently clean any legacy Quran data in Firestore for class members if authorized
+  useEffect(() => {
+    if (!isEditor) return;
+    const studentsToClean = students.filter(s => 
+      (s.className && /quran/i.test(s.className)) || 
+      (s.remarks && /quran/i.test(s.remarks))
+    );
+    if (studentsToClean.length > 0) {
+      studentsToClean.forEach(async (stu) => {
+        try {
+          const cleanedStu = {
+            ...stu,
+            className: 'Class Member',
+            remarks: stu.remarks && /quran/i.test(stu.remarks)
+              ? (stu.remarks.replace(/quran\s*(department)?\s*(active\s*roster)?/gi, 'Class Member').trim() || 'Class Member')
+              : stu.remarks || 'Class Member'
+          };
+          await onUpdateStudent(cleanedStu);
+        } catch (err) {
+          console.error("Auto-migrating student record:", err);
+        }
+      });
+    }
+  }, [students, isEditor, onUpdateStudent]);
 
   // Accounts classifications
   const assetAccounts = useMemo(() => accounts.filter(a => a.type === 'Asset'), [accounts]);
@@ -233,8 +277,8 @@ export function StudentDuesView({
   const folderStudents = useMemo(() => {
     if (!activeProgram) return [];
     const excludedIds = activeProgram.excludedStudentIds || [];
-    return quranStudentsList.filter(stu => !excludedIds.includes(stu.id));
-  }, [activeProgram, quranStudentsList]);
+    return classStudentsList.filter(stu => !excludedIds.includes(stu.id));
+  }, [activeProgram, classStudentsList]);
 
   // Auto-populate ledger accounts fallbacks dynamically when lists load
   useEffect(() => {
@@ -271,7 +315,7 @@ export function StudentDuesView({
       let target = 0;
       let paid = 0;
       const excludedIds = prog.excludedStudentIds || [];
-      quranStudentsList.forEach(stu => {
+      classStudentsList.forEach(stu => {
         if (excludedIds.includes(stu.id)) return;
         const item = prog.studentDues[stu.id] || { amountPaid: 0, totalDue: prog.defaultAmount, status: 'Pending' };
         raised += item.amountPaid;
@@ -287,7 +331,7 @@ export function StudentDuesView({
       };
     });
     return stats;
-  }, [programs, quranStudentsList]);
+  }, [programs, classStudentsList]);
 
   // Selected program statistics
   const currentProgramStats = useMemo(() => {
@@ -299,7 +343,7 @@ export function StudentDuesView({
     let unpaid = 0;
     const excludedIds = activeProgram.excludedStudentIds || [];
 
-    quranStudentsList.forEach(stu => {
+    classStudentsList.forEach(stu => {
       if (excludedIds.includes(stu.id)) return;
       const item = activeProgram.studentDues[stu.id] || { amountPaid: 0, totalDue: activeProgram.defaultAmount, status: 'Pending' };
       raised += item.amountPaid;
@@ -320,13 +364,13 @@ export function StudentDuesView({
       target,
       rate: exactRate
     };
-  }, [activeProgram, quranStudentsList]);
+  }, [activeProgram, classStudentsList]);
 
   // Active selected program rows (retrieved dynamically matching roster)
   const currentProgramRows = useMemo(() => {
     if (!activeProgram) return [];
     const excludedIds = activeProgram.excludedStudentIds || [];
-    return quranStudentsList
+    return classStudentsList
       .filter(stu => !excludedIds.includes(stu.id))
       .map(stu => {
         const dues = activeProgram.studentDues[stu.id] || {
@@ -340,12 +384,12 @@ export function StudentDuesView({
           dues
         };
       });
-  }, [activeProgram, quranStudentsList]);
+  }, [activeProgram, classStudentsList]);
 
   // Filter & Sort table items
   const filteredRows = useMemo(() => {
     if (activeView === 'roster') {
-      return quranStudentsList.filter(s => {
+      return classStudentsList.filter(s => {
         const matchSearch = s.name.toLowerCase().includes(searchTerm.toLowerCase()) || s.id.toLowerCase().includes(searchTerm.toLowerCase());
         const matchStatus = statusFilter === 'All' || s.status === statusFilter;
         return matchSearch && matchStatus;
@@ -384,7 +428,7 @@ export function StudentDuesView({
           return sortOrder === 'asc' ? (valA || 0) - (valB || 0) : (valB || 0) - (valA || 0);
         }
       });
-  }, [activeView, activeProgram, quranStudentsList, currentProgramRows, searchTerm, statusFilter, sortBy, sortOrder]);
+  }, [activeView, activeProgram, classStudentsList, currentProgramRows, searchTerm, statusFilter, sortBy, sortOrder]);
 
   const requestSort = (field: 'name' | 'id' | 'paid' | 'remaining') => {
     if (sortBy === field) {
@@ -409,18 +453,18 @@ export function StudentDuesView({
     setPayCreditAcc(feesAcc?.id || '');
     
     // Find name
-    const sName = quranStudentsList.find(s => s.id === stuId)?.name || 'Student';
+    const sName = classStudentsList.find(s => s.id === stuId)?.name || 'Student';
     setPayRemarks(`${activeProgram.name} drive payment from ${sName} (${stuId})`);
   };
 
-  // Create standard Quran students automatically loop
+  // Create standard class students automatically
   const handleAutoGenerateRoster = async () => {
     setIsGeneratingRoster(true);
     let successCount = 0;
     try {
-      for (let i = 0; i < MASTER_80_QURAN_STUDENTS.length; i++) {
-        const studentName = MASTER_80_QURAN_STUDENTS[i];
-        const studentRoll = `QURAN-${101 + i}`;
+      for (let i = 0; i < DEFAULT_CLASS_MEMBERS.length; i++) {
+        const studentName = DEFAULT_CLASS_MEMBERS[i];
+        const studentRoll = `ROLL-${101 + i}`;
         
         // Skip duplicate IDs
         if (students.some(s => s.id === studentRoll)) continue;
@@ -428,11 +472,11 @@ export function StudentDuesView({
         const newStu: Student = {
           id: studentRoll,
           name: studentName,
-          className: 'QURAN DEPARTMENT',
+          className: 'Class Member',
           totalDue: 500, // global placeholder
           amountPaid: 0,
           status: 'Pending',
-          remarks: 'Quran Department Active Roster'
+          remarks: 'Class Member Active Roster'
         };
         
         const ok = await onAddStudent(newStu);
@@ -461,7 +505,7 @@ export function StudentDuesView({
       const lines = bulkStudentInput.split('\n');
       let currentMaxNum = 100;
       students.forEach(s => {
-        const match = s.id.match(/^QURAN-(\d+)$/i);
+        const match = s.id.match(/^ROLL-(\d+)$/i) || s.id.match(/^QURAN-(\d+)$/i) || s.id.match(/^(\d+)$/i);
         if (match) {
           const num = parseInt(match[1]);
           if (num > currentMaxNum) currentMaxNum = num;
@@ -474,8 +518,8 @@ export function StudentDuesView({
 
         let id = '';
         let name = '';
-        let className = 'QURAN DEPARTMENT';
-        let remarks: string | undefined = 'Bulk Imported Student';
+        let className = 'Class Member';
+        let remarks: string | undefined = 'Class Member';
 
         // Check if tab-delimited, comma-delimited, or semicolon-delimited
         let parts: string[] = [];
@@ -514,7 +558,7 @@ export function StudentDuesView({
         // Auto-generate stable sequential ID if not explicitly parsed/provided
         if (!id) {
           currentMaxNum++;
-          id = `QURAN-${currentMaxNum}`;
+          id = `ROLL-${currentMaxNum}`;
         }
 
         // De-duplicate Roll IDs on the fly
@@ -554,7 +598,7 @@ export function StudentDuesView({
 
   // Delete all students sequentially or via batch, without modal warning for a sudden instantaneous action
   const handleClearAllStudents = async () => {
-    if (quranStudentsList.length === 0) {
+    if (classStudentsList.length === 0) {
       if (showToast) {
         showToast("No students to clear!", "info");
       } else {
@@ -567,14 +611,14 @@ export function StudentDuesView({
     let successCount = 0;
     try {
       if (onClearAllStudents) {
-        const studentIds = quranStudentsList.map(s => s.id);
+        const studentIds = classStudentsList.map(s => s.id);
         const ok = await onClearAllStudents(studentIds);
         if (ok) {
           successCount = studentIds.length;
         }
       } else {
         // Fallback
-        for (const s of [...quranStudentsList]) {
+        for (const s of [...classStudentsList]) {
           const ok = await onDeleteStudent(s.id);
           if (ok) successCount++;
         }
@@ -604,7 +648,7 @@ export function StudentDuesView({
     const cleanStu: Student = {
       id: studentId.trim(),
       name: studentName.trim(),
-      className: studentClass.trim() || 'QURAN DEPARTMENT',
+      className: studentClass.trim() || 'Class Member',
       totalDue: 0,
       amountPaid: 0,
       status: 'Pending',
@@ -640,7 +684,7 @@ export function StudentDuesView({
 
     // Initialize all existing students with default target dues for this program
     const duesMap: { [studentId: string]: StudentDuesItem } = {};
-    quranStudentsList.forEach(stu => {
+    classStudentsList.forEach(stu => {
       duesMap[stu.id] = {
         amountPaid: 0,
         totalDue: standardAmt,
@@ -691,7 +735,7 @@ export function StudentDuesView({
 
     // 1. Post double-entry if verified
     if (payPostJournal) {
-      const studentName = quranStudentsList.find(s => s.id === payingStudentId)?.name || 'Student';
+      const studentName = classStudentsList.find(s => s.id === payingStudentId)?.name || 'Student';
       const defaultNarration = `Fee collection from ${studentName} for program: ${activeProgram.name}`;
 
       if (payIsCompound) {
@@ -1151,8 +1195,8 @@ export function StudentDuesView({
     setEditingStudent(stu);
     setStudentId(stu.id);
     setStudentName(stu.name);
-    setStudentClass(stu.className || 'QURAN DEPARTMENT');
-    setStudentRemarks(stu.remarks || '');
+    setStudentClass(stu.className && !/quran/i.test(stu.className) ? stu.className : 'Class Member');
+    setStudentRemarks(stu.remarks && /quran/i.test(stu.remarks) ? stu.remarks.replace(/quran\s*(department)?\s*(active\s*roster)?/gi, 'Class Member').trim() : (stu.remarks || ''));
     setIsAddStudentOpen(true);
   };
 
@@ -1219,7 +1263,7 @@ export function StudentDuesView({
               className="w-full justify-center inline-flex items-center gap-1.5 px-3.5 py-3 bg-slate-50 border border-gray-200 text-slate-600 hover:bg-slate-100 hover:text-slate-950 text-xs font-bold rounded-xl transition-all shadow-3xs cursor-pointer"
             >
               <ClipboardList size={13} className="text-slate-500" />
-              <span>Manage Roster ({quranStudentsList.length})</span>
+              <span>Manage Roster ({classStudentsList.length})</span>
             </button>
           )}
 
@@ -1227,7 +1271,7 @@ export function StudentDuesView({
             <button
               onClick={() => {
                 setEditingStudent(null);
-                setStudentId(`ROLL-${101 + quranStudentsList.length}`);
+                setStudentId(`ROLL-${101 + classStudentsList.length}`);
                 setStudentName('');
                 setStudentClass('CLASS UNION');
                 setStudentRemarks('');
@@ -1253,7 +1297,7 @@ export function StudentDuesView({
       </div>
 
       {/* ⚠️ Empty Roster State */}
-      {quranStudentsList.length === 0 && (
+      {classStudentsList.length === 0 && (
         <div className="bg-slate-50 border border-slate-200 p-8 rounded-2xl flex flex-col items-center justify-center text-center max-w-xl mx-auto my-6 space-y-4 shadow-3xs">
           <div className="p-3 bg-white border border-gray-150 rounded-2xl shadow-3xs text-slate-400">
             <Users size={32} />
@@ -1358,7 +1402,7 @@ export function StudentDuesView({
                       {/* Progress bar */}
                       <div className="space-y-1.5">
                         <div className="flex items-center justify-between text-[10px] font-mono">
-                          <span className="text-indigo-600 font-bold">{stat.paidCount} of {quranStudentsList.length} Settled</span>
+                          <span className="text-indigo-600 font-bold">{stat.paidCount} of {classStudentsList.length} Settled</span>
                           <span className="text-slate-900 font-bold font-mono">{stat.rate}% Cleared</span>
                         </div>
                         <div className="w-full bg-slate-100 h-1.5 rounded-full overflow-hidden">
@@ -1469,7 +1513,7 @@ export function StudentDuesView({
               />
             </div>
             <span className="text-xs font-mono font-bold text-slate-400">
-              Showing {filteredRows.length} of {quranStudentsList.length} roster profiles
+              Showing {filteredRows.length} of {classStudentsList.length} roster profiles
             </span>
           </div>
 
@@ -1696,7 +1740,7 @@ export function StudentDuesView({
               <div className="bg-white border border-gray-200 p-5 rounded-2xl flex items-center justify-between shadow-3xs hover:shadow-xs transition-shadow">
                 <div className="space-y-1">
                   <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider font-mono font-mono">Fully Paid Members</p>
-                  <h3 className="text-2xl font-extrabold text-slate-900 font-mono">{currentProgramStats.paid} <span className="text-xs text-slate-400">/ {quranStudentsList.length}</span></h3>
+                  <h3 className="text-2xl font-extrabold text-slate-900 font-mono">{currentProgramStats.paid} <span className="text-xs text-slate-400">/ {classStudentsList.length}</span></h3>
                   <p className="text-[10px] text-slate-400 font-mono">Cleared entire individual dues</p>
                 </div>
                 <div className="w-10 h-10 bg-indigo-50 text-indigo-600 rounded-xl flex items-center justify-center">
@@ -2245,7 +2289,7 @@ export function StudentDuesView({
                 <div className="flex items-center gap-2">
                   <UserPlus className="text-indigo-600" size={18} />
                   <h3 className="text-sm font-extrabold text-slate-800">
-                    {editingStudent ? 'Modify Student Directory Record' : 'Enroll New Quran Class Member'}
+                    {editingStudent ? 'Modify Student Directory Record' : 'Enroll New Class Member'}
                   </h3>
                 </div>
                 <button onClick={() => setIsAddStudentOpen(false)} className="p-1 hover:bg-gray-150 rounded-lg text-slate-400">
@@ -2259,7 +2303,7 @@ export function StudentDuesView({
                   <input
                     type="text"
                     required
-                    placeholder="e.g. QURAN-101"
+                    placeholder="e.g. ROLL-101"
                     disabled={!!editingStudent}
                     value={studentId}
                     onChange={(e) => setStudentId(e.target.value)}
@@ -2570,7 +2614,7 @@ export function StudentDuesView({
                           <p className="font-bold underline text-indigo-950">Option 1: Comma/Tab Separated</p>
                           <p>RollNo, DuesPaid, TargetDue, Remarks</p>
                           <p className="text-slate-500 italic mt-1 leading-relaxed">
-                            QURAN-101, 250, 500, Paid GPay<br />
+                            ROLL-101, 250, 500, Paid GPay<br />
                             Yoonus Chr, 500, 500, Cash
                           </p>
                         </div>
@@ -2591,7 +2635,7 @@ export function StudentDuesView({
                       </label>
                       <textarea
                         required
-                        placeholder="QURAN-101, 500, 500, Paid GPay&#10;Fasel Rahman, 200, 500, Installment 1&#10;Aisha Jabeen 500&#10;Muhammad Shafi: 300"
+                        placeholder="ROLL-101, 500, 500, Paid GPay&#10;Fasel Rahman, 200, 500, Installment 1&#10;Aisha Jabeen 500&#10;Muhammad Shafi: 300"
                         rows={11}
                         value={bulkPasteInput}
                         onChange={(e) => setBulkPasteInput(e.target.value)}
@@ -2894,7 +2938,7 @@ export function StudentDuesView({
                 <div className="flex items-center gap-1.5 text-slate-800">
                   <CreditCard className="text-emerald-750" size={18} />
                   <h3 className="text-xs font-bold">
-                    Record Pay: {quranStudentsList.find(s => s.id === payingStudentId)?.name || 'Student'}
+                    Record Pay: {classStudentsList.find(s => s.id === payingStudentId)?.name || 'Student'}
                   </h3>
                 </div>
                 <button onClick={() => setPayingStudentId(null)} className="p-1 hover:bg-emerald-100/50 rounded-lg text-slate-400">
@@ -3247,8 +3291,8 @@ export function StudentDuesView({
                   </div>
                   <div>
                     <span className="font-bold text-slate-800 block mb-0.5">Format B (Spreadsheet pasted):</span>
-                    Q-104 , Zainab K , Quran B , Active leader<br />
-                    Q-105 , Ibrahim S , Quran A , Scholarship<br />
+                    ROLL-104 , Zainab K , Class Member , Active leader<br />
+                    ROLL-105 , Ibrahim S , Class Member , Scholarship<br />
                     <span className="text-gray-400 italic">(ID, Name, Class, Remarks)</span>
                   </div>
                 </div>
@@ -3268,7 +3312,7 @@ export function StudentDuesView({
                 <div className="flex items-start gap-2 p-3 border border-indigo-100 bg-indigo-50/40 rounded-xl">
                   <Info size={14} className="text-indigo-600 shrink-0 mt-0.5" />
                   <div className="text-[11px] text-indigo-900 leading-normal">
-                    <strong>Auto ID Sequence:</strong> Absent explicit ID codes, names automatically assign available series codes (e.g. <code>QURAN-101</code>, etc.) based on your current master register count.
+                    <strong>Auto ID Sequence:</strong> Absent explicit ID codes, names automatically assign available series codes (e.g. <code>ROLL-101</code>, etc.) based on your current master register count.
                   </div>
                 </div>
 
@@ -3432,12 +3476,12 @@ export function StudentDuesView({
                     </div>
                   ) : (
                     activeProgram.excludedStudentIds.map(studentId => {
-                      const studentObj = quranStudentsList.find(s => s.id === studentId);
+                      const studentObj = classStudentsList.find(s => s.id === studentId);
                       return (
                         <div key={studentId} className="p-3 flex items-center justify-between hover:bg-slate-50/50 transition-colors">
                           <div>
-                            <span className="text-xs font-bold font-mono text-slate-800 uppercase block">{studentId}</span>
-                            <span className="text-xs text-slate-600 font-semibold">{studentObj?.name || 'Unknown Student'}</span>
+                            <span className="text-xs text-slate-800 font-bold block">{studentObj?.name || 'Unknown Student'}</span>
+                            <span className="text-[10px] text-slate-400 font-medium">Class Member</span>
                           </div>
                           <button
                             type="button"
@@ -3499,7 +3543,7 @@ export function StudentDuesView({
 
               <div className="p-6 space-y-4 text-left">
                 <p className="text-xs text-slate-600 leading-relaxed">
-                  Are you sure you want to remove student <strong>{removingStudentId}</strong> ({quranStudentsList.find(s => s.id === removingStudentId)?.name || 'Unknown Student'}) from the active campaign <strong>{activeProgram.name}</strong>? This will hide their dues and given balance statistics from this specific nada structure.
+                  Are you sure you want to remove <strong>{classStudentsList.find(s => s.id === removingStudentId)?.name || removingStudentId}</strong> from the active campaign <strong>{activeProgram.name}</strong>? This will hide their dues and given balance statistics from this specific campaign.
                 </p>
 
                 <div className="flex gap-2 pt-2">

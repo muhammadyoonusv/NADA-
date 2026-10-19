@@ -437,6 +437,13 @@ export default function App() {
         if (studentObj && 'phone' in studentObj) {
           delete studentObj.phone;
         }
+        // Remove all Quran related data and add them as members of the class
+        if (!studentObj.className || /quran/i.test(studentObj.className)) {
+          studentObj.className = 'Class Member';
+        }
+        if (studentObj.remarks && /quran/i.test(studentObj.remarks)) {
+          studentObj.remarks = studentObj.remarks.replace(/quran\s*(department)?\s*(active\s*roster)?/gi, 'Class Member').trim() || 'Class Member';
+        }
         list.push(studentObj);
       });
 

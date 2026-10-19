@@ -190,12 +190,17 @@ div#root:nth-of-type(1) > div:nth-of-type(1) > main:nth-of-type(1) > div:nth-of-
     background-color: #9e00ec !important;
 }
 
-
-
-/* Hide specific elements in chat greeting reply */
-div#root:nth-of-type(1) > div:nth-of-type(1) > div:nth-of-type(2) > div:nth-of-type(2) > div:nth-of-type(2) > div:nth-of-type(1) > div:nth-of-type(12) > div:nth-of-type(2) > div:nth-of-type(2) > div:nth-of-type(1) > ul:nth-of-type(1),
-div#root:nth-of-type(1) > div:nth-of-type(1) > div:nth-of-type(2) > div:nth-of-type(2) > div:nth-of-type(2) > div:nth-of-type(1) > div:nth-of-type(12) > div:nth-of-type(2) > div:nth-of-type(2) > div:nth-of-type(1) > h4:nth-of-type(1),
-div#root:nth-of-type(1) > div:nth-of-type(1) > div:nth-of-type(2) > div:nth-of-type(2) > div:nth-of-type(2) > div:nth-of-type(1) > div:nth-of-type(12) > div:nth-of-type(2) > div:nth-of-type(2) > div:nth-of-type(2) > button:nth-of-type(1),
-div#root:nth-of-type(1) > div:nth-of-type(1) > div:nth-of-type(2) > div:nth-of-type(2) > div:nth-of-type(2) > div:nth-of-type(1) > div:nth-of-type(12) > div:nth-of-type(2) > div:nth-of-type(2) > div:nth-of-type(3) > button:nth-of-type(1) > span:nth-of-type(1) {
-    display: none !important;
+/* Hide Netlify Badge */
+iframe#netlify-honeypot, 
+div[id^="netlify"], 
+div[class*="netlify-badge"],
+a[href*="netlify.com/?utm_source"],
+a[href*="netlify.com"][target="_blank"],
+.netlify-badge {
+  display: none !important;
+  visibility: hidden !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
 }
+
+
