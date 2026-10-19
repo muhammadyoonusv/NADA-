@@ -124,6 +124,31 @@ export function StudentDuesView({
   const [newProgramDesc, setNewProgramDesc] = useState('');
   const [newProgramDate, setNewProgramDate] = useState(new Date().toISOString().split('T')[0]);
 
+  // Form states: Edit Program
+  const [editingProgram, setEditingProgram] = useState<Program | null>(null);
+  const [editProgramName, setEditProgramName] = useState('');
+  const [editProgramAmt, setEditProgramAmt] = useState('500');
+  const [editProgramDesc, setEditProgramDesc] = useState('');
+  const [editProgramDate, setEditProgramDate] = useState('');
+
+  const handleUpdateProgramSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingProgram || !editProgramName.trim()) return;
+    const success = await onUpdateProgram({
+      ...editingProgram,
+      name: editProgramName.trim(),
+      defaultAmount: parseFloat(editProgramAmt) || 0,
+      remarks: editProgramDesc.trim(),
+      date: editProgramDate || editingProgram.date
+    });
+    if (success) {
+      showToast?.('Program folder updated successfully!', 'success');
+      setEditingProgram(null);
+    } else {
+      showToast?.('Failed to update program folder.', 'err');
+    }
+  };
+
   // Form states: Master Student Roster
   const [studentId, setStudentId] = useState('');
   const [studentName, setStudentName] = useState('');
@@ -1053,7 +1078,7 @@ export function StudentDuesView({
       };
       const ok = await onUpdateProgram(updatedProg);
       if (ok && showToast) {
-        showToast("Member successfully removed from this campaign folder", "success");
+        showToast("Member successfully removed from this nada", "success");
       }
     }
     setRemovingStudentId(null);
@@ -1078,7 +1103,7 @@ export function StudentDuesView({
     if (ok) {
       setSelectedStudentIds([]);
       if (showToast) {
-        showToast(`Successfully removed ${newExcluded.length - curExcluded.length} members from this campaign folder`, "success");
+        showToast(`Successfully removed ${newExcluded.length - curExcluded.length} members from this nada`, "success");
       }
     }
     setIsBulkRemoveConfirmOpen(false);
@@ -1094,7 +1119,7 @@ export function StudentDuesView({
     };
     const ok = await onUpdateProgram(updatedProg);
     if (ok && showToast) {
-      showToast("Member restored to campaign folder successfully", "success");
+      showToast("Member restored to nada successfully", "success");
     }
   };
 
@@ -1114,7 +1139,7 @@ export function StudentDuesView({
     if (ok) {
       setIsRestoreModalOpen(false);
       if (showToast) {
-        showToast("All members successfully restored to this campaign folder", "success");
+        showToast("All members successfully restored to this nada", "success");
       }
     }
     setIsRestoreAllConfirmOpen(false);
@@ -1356,18 +1381,34 @@ export function StudentDuesView({
                       </div>
                     </div>
 
-                    {/* Danger delete bucket */}
+                    {/* Danger delete bucket & Edit folder button */}
                     {isEditor && (
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setDeletingProgramId(prog.id);
-                        }}
-                        className="absolute top-4 right-4 p-1.5 text-slate-300 hover:text-rose-600 hover:bg-rose-50 border border-transparent hover:border-rose-100 rounded-md transition-colors"
-                        title="Delete program folder"
-                      >
-                        <Trash2 size={12} />
-                      </button>
+                      <div className="absolute top-4 right-4 flex items-center gap-1">
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setEditingProgram(prog);
+                            setEditProgramName(prog.name);
+                            setEditProgramAmt(prog.defaultAmount.toString());
+                            setEditProgramDesc(prog.remarks || '');
+                            setEditProgramDate(prog.date);
+                          }}
+                          className="p-1.5 text-slate-300 hover:text-indigo-600 hover:bg-indigo-50 border border-transparent hover:border-indigo-100 rounded-md transition-colors cursor-pointer"
+                          title="Edit folder name"
+                        >
+                          <Edit size={12} />
+                        </button>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setDeletingProgramId(prog.id);
+                          }}
+                          className="p-1.5 text-slate-300 hover:text-rose-600 hover:bg-rose-50 border border-transparent hover:border-rose-100 rounded-md transition-colors cursor-pointer"
+                          title="Delete program folder"
+                        >
+                          <Trash2 size={12} />
+                        </button>
+                      </div>
                     )}
                   </motion.div>
                 );
@@ -1443,7 +1484,7 @@ export function StudentDuesView({
             <table className="w-full text-left text-xs">
               <thead>
                 <tr className="bg-slate-50 border-b border-gray-200 font-mono text-[10px] text-slate-505 font-bold uppercase">
-                  <th className="p-4">Roll No / ID</th>
+                  <th className="p-4">Sl No</th>
                   <th className="p-4">Student Name</th>
                   <th className="p-4">Particular Notes</th>
                   <th className="p-4 text-right">Actions</th>
@@ -1458,9 +1499,9 @@ export function StudentDuesView({
                     </td>
                   </tr>
                 ) : (
-                  filteredRows.map(stu => (
+                  filteredRows.map((stu, idx) => (
                     <tr key={stu.id} className="hover:bg-slate-50/50 leading-relaxed font-medium text-slate-600">
-                      <td className="p-4 font-bold font-mono text-slate-900 uppercase">{stu.id}</td>
+                      <td className="p-4 font-bold font-mono text-slate-900">{idx + 1}</td>
                       <td className="p-4 text-slate-900 font-semibold">{stu.name}</td>
                       <td className="p-4 text-slate-400 text-[11px]">{stu.remarks || <span className="italic text-gray-200">No remarks</span>}</td>
                       <td className="p-4 text-right">
@@ -1498,11 +1539,11 @@ export function StudentDuesView({
                 <p>No master student records match query.</p>
               </div>
             ) : (
-              filteredRows.map(stu => (
+              filteredRows.map((stu, idx) => (
                 <div key={stu.id} className="bg-white border border-gray-200 p-4 rounded-xl space-y-3 shadow-3xs">
                   <div className="flex justify-between items-start gap-2">
                     <div>
-                      <span className="text-[10px] font-bold font-mono text-slate-400 block uppercase">{stu.id}</span>
+                      <span className="text-[10px] font-bold font-mono text-slate-400 block uppercase">Sl. #{idx + 1}</span>
                       <span className="font-bold text-slate-900 text-sm">{stu.name}</span>
                     </div>
                   </div>
@@ -1561,6 +1602,22 @@ export function StudentDuesView({
               <div className="flex items-center gap-2">
                 <Folder className="text-indigo-400 fill-indigo-950" size={20} />
                 <h3 className="text-xl font-extrabold tracking-tight">{activeProgram.name}</h3>
+                {isEditor && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setEditingProgram(activeProgram);
+                      setEditProgramName(activeProgram.name);
+                      setEditProgramAmt(activeProgram.defaultAmount.toString());
+                      setEditProgramDesc(activeProgram.remarks || '');
+                      setEditProgramDate(activeProgram.date);
+                    }}
+                    className="p-1.5 text-indigo-300 hover:text-white hover:bg-white/10 rounded-md transition-colors cursor-pointer ml-1"
+                    title="Edit folder name and details"
+                  >
+                    <Edit size={14} />
+                  </button>
+                )}
               </div>
 
               <div className="flex flex-wrap gap-x-4 gap-y-1 text-slate-300 font-mono text-[11px]">
@@ -1583,7 +1640,7 @@ export function StudentDuesView({
                   type="button"
                   onClick={() => setIsRestoreModalOpen(true)}
                   className="inline-flex items-center gap-1.5 px-3 py-2.5 bg-slate-800 hover:bg-slate-700 text-indigo-200 border border-slate-700 text-xs font-bold rounded-xl transition-all cursor-pointer shadow-sm"
-                  title="Restore students you removed from this campaign folder"
+                  title="Restore students you removed from this nada"
                 >
                   <RefreshCw size={13} className="text-indigo-400" />
                   Restore Excluded ({activeProgram.excludedStudentIds.length})
@@ -1759,7 +1816,7 @@ export function StudentDuesView({
                       </th>
                     )}
                     <th className="p-4 cursor-pointer hover:bg-slate-100" onClick={() => requestSort('id')}>
-                      Roll No / ID {sortBy === 'id' && (sortOrder === 'asc' ? '↑' : '↓')}
+                      Roll No {sortBy === 'id' && (sortOrder === 'asc' ? '↑' : '↓')}
                     </th>
                     <th className="p-4 cursor-pointer hover:bg-slate-100" onClick={() => requestSort('name')}>
                       Member Name {sortBy === 'name' && (sortOrder === 'asc' ? '↑' : '↓')}
@@ -1785,7 +1842,7 @@ export function StudentDuesView({
                       </td>
                     </tr>
                   ) : (
-                    filteredRows.map((row) => {
+                    filteredRows.map((row, idx) => {
                       const balance = Math.max(0, row.dues.totalDue - row.dues.amountPaid);
                       const pct = row.dues.totalDue > 0 ? Math.min(100, Math.round((row.dues.amountPaid / row.dues.totalDue) * 100)) : 0;
                       const isSelected = selectedStudentIds.includes(row.student.id);
@@ -1819,9 +1876,9 @@ export function StudentDuesView({
                             </td>
                           )}
 
-                          {/* ID */}
+                          {/* Roll No */}
                           <td className="p-4 font-bold font-mono text-slate-900 uppercase">
-                            {row.student.id}
+                            {idx + 1}
                           </td>
 
                           {/* Name */}
@@ -1912,7 +1969,7 @@ export function StudentDuesView({
                                 type="button"
                                 onClick={() => handleRemoveStudentFromProgram(row.student.id)}
                                 className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 border border-gray-200 hover:border-rose-300 rounded-md transition-colors cursor-pointer shadow-3xs"
-                                title="Remove student from this campaign folder"
+                                title="Remove student from this nada"
                               >
                                 <Trash2 size={12} />
                               </button>
@@ -1936,7 +1993,7 @@ export function StudentDuesView({
                 <p>No student payments found matching your filter selection.</p>
               </div>
             ) : (
-              filteredRows.map((row) => {
+              filteredRows.map((row, idx) => {
                 const balance = Math.max(0, row.dues.totalDue - row.dues.amountPaid);
                 const pct = row.dues.totalDue > 0 ? Math.min(100, Math.round((row.dues.amountPaid / row.dues.totalDue) * 100)) : 0;
                 const isSelected = selectedStudentIds.includes(row.student.id);
@@ -1971,7 +2028,7 @@ export function StudentDuesView({
                           </button>
                         )}
                         <div>
-                          <span className="text-[10px] font-bold font-mono text-slate-400 block uppercase">{row.student.id}</span>
+                          <span className="text-[10px] font-bold font-mono text-slate-400 block uppercase">Roll #{idx + 1}</span>
                           <span className="font-bold text-slate-900 text-sm leading-snug block">{row.student.name}</span>
                         </div>
                       </div>
@@ -2058,7 +2115,7 @@ export function StudentDuesView({
                         type="button"
                         onClick={() => handleRemoveStudentFromProgram(row.student.id)}
                         className="px-3 py-2.5 text-slate-405 hover:text-rose-605 hover:bg-rose-50 border border-slate-205 hover:border-rose-205 rounded-lg transition-all cursor-pointer flex items-center justify-center"
-                        title="Remove student from this campaign folder"
+                        title="Remove student from this nada"
                       >
                         <Trash2 size={13} />
                       </button>
@@ -2275,7 +2332,7 @@ export function StudentDuesView({
                     </h3>
                   </div>
                   <p className="text-[11px] text-slate-500">
-                    Directly type given collections and dues targets for the <span className="font-extrabold text-emerald-800">{folderStudents.length} campaign folder students</span>. Tab or click into boxes, change numbers, and hit apply to write updates instantly to Firestore.
+                    Directly type given collections and dues targets for the <span className="font-extrabold text-emerald-800">{folderStudents.length} NADA students</span>. Tab or click into boxes, change numbers, and hit apply to write updates instantly to Firestore.
                   </p>
                 </div>
                 <div className="flex items-center gap-2">
@@ -3270,7 +3327,7 @@ export function StudentDuesView({
 
               <div className="p-6 space-y-4 text-left">
                 <p className="text-xs text-slate-600 leading-relaxed">
-                  Are you sure you want to permanently delete student **{deletingStudentId}**? Removing them from the master roster will also purge their records and contribution items throughout all drive campaign folders drives!
+                  Are you sure you want to permanently delete student **{deletingStudentId}**? Removing them from the master roster will also purge their records and contribution items throughout all drive nada drives!
                 </p>
 
                 <div className="flex gap-2 pt-2">
@@ -3442,7 +3499,7 @@ export function StudentDuesView({
 
               <div className="p-6 space-y-4 text-left">
                 <p className="text-xs text-slate-600 leading-relaxed">
-                  Are you sure you want to remove student <strong>{removingStudentId}</strong> ({quranStudentsList.find(s => s.id === removingStudentId)?.name || 'Unknown Student'}) from the active campaign <strong>{activeProgram.name}</strong>? This will hide their dues and given balance statistics from this specific campaign folder structure.
+                  Are you sure you want to remove student <strong>{removingStudentId}</strong> ({quranStudentsList.find(s => s.id === removingStudentId)?.name || 'Unknown Student'}) from the active campaign <strong>{activeProgram.name}</strong>? This will hide their dues and given balance statistics from this specific nada structure.
                 </p>
 
                 <div className="flex gap-2 pt-2">
@@ -3490,7 +3547,7 @@ export function StudentDuesView({
 
               <div className="p-6 space-y-4 text-left">
                 <p className="text-xs text-slate-600 leading-relaxed">
-                  Are you sure you want to exclude and remove all <strong>{selectedStudentIds.length}</strong> selected members from the campaign folder <strong>{activeProgram.name}</strong>?
+                  Are you sure you want to exclude and remove all <strong>{selectedStudentIds.length}</strong> selected members from the nada <strong>{activeProgram.name}</strong>?
                 </p>
 
                 <div className="flex gap-2 pt-2">
@@ -3560,10 +3617,93 @@ export function StudentDuesView({
               </div>
             </motion.div>
           </div>
+         )}
+       </AnimatePresence>
+      {/* ======================= MODAL L: EDIT PROGRAM FOLDER ======================= */}
+      <AnimatePresence>
+        {editingProgram && (
+          <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
+            <motion.div
+              initial={{ scale: 0.95, y: 10 }}
+              animate={{ scale: 1, y: 0 }}
+              exit={{ scale: 0.95, y: 10 }}
+              className="bg-white border border-gray-200 rounded-3xl w-full max-w-md shadow-2xl overflow-hidden text-left"
+            >
+              <div className="p-5 border-b border-gray-100 bg-indigo-50/50 flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Edit className="text-indigo-600" size={18} />
+                  <h3 className="text-sm font-extrabold text-slate-800">Edit Program Folder</h3>
+                </div>
+                <button onClick={() => setEditingProgram(null)} className="p-1 hover:bg-slate-100 rounded-lg text-slate-450 cursor-pointer">
+                  <X size={16} />
+                </button>
+              </div>
+
+              <form onSubmit={handleUpdateProgramSubmit} className="p-6 space-y-4 text-left">
+                <div>
+                  <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-widest font-mono mb-1">Folder / Program Name *</label>
+                  <input
+                    type="text"
+                    required
+                    value={editProgramName}
+                    onChange={(e) => setEditProgramName(e.target.value)}
+                    className="w-full p-2.5 bg-gray-50 text-xs border border-gray-205 rounded-xl outline-none focus:ring-1 focus:ring-indigo-400 focus:bg-white text-slate-900 font-bold"
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-widest font-mono mb-1">Default Dues Target (₹) *</label>
+                    <input
+                      type="number"
+                      required
+                      value={editProgramAmt}
+                      onChange={(e) => setEditProgramAmt(e.target.value)}
+                      className="w-full p-2.5 bg-gray-50 text-xs border border-gray-205 rounded-xl outline-none focus:ring-1 focus:ring-indigo-400 focus:bg-white text-slate-900 font-bold"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-widest font-mono mb-1">Organized Date *</label>
+                    <input
+                      type="date"
+                      required
+                      value={editProgramDate}
+                      onChange={(e) => setEditProgramDate(e.target.value)}
+                      className="w-full p-2.5 bg-gray-50 text-xs border border-gray-205 rounded-xl outline-none focus:ring-1 focus:ring-indigo-400 focus:bg-white text-slate-900 font-bold"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-widest font-mono mb-1">Description / Remarks</label>
+                  <textarea
+                    rows={2}
+                    value={editProgramDesc}
+                    onChange={(e) => setEditProgramDesc(e.target.value)}
+                    className="w-full p-2.5 bg-gray-50 text-xs border border-gray-205 rounded-xl outline-none focus:ring-1 focus:ring-indigo-400 focus:bg-white text-slate-900 font-medium"
+                  />
+                </div>
+
+                <div className="flex gap-2 pt-2">
+                  <button
+                    type="button"
+                    onClick={() => setEditingProgram(null)}
+                    className="flex-1 px-4 py-2.5 bg-slate-100 hover:bg-slate-200 rounded-xl text-slate-700 text-xs font-bold cursor-pointer"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    className="flex-1 px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-xl cursor-pointer shadow-sm"
+                  >
+                    Save Changes
+                  </button>
+                </div>
+              </form>
+            </motion.div>
+          </div>
         )}
       </AnimatePresence>
-
-
 
     </div>
   );

@@ -69,6 +69,9 @@ export interface ChatMessage {
     base64: string;
   };
   suggestedEntry?: {
+    isCompound?: boolean;
+    debits?: { accountId: string; accountName: string; accountType: string; amount: number; isNewAccount: boolean }[];
+    credits?: { accountId: string; accountName: string; accountType: string; amount: number; isNewAccount: boolean }[];
     debitAccountId?: string;
     debitAccountName?: string;
     debitAccountType?: string;
@@ -113,21 +116,6 @@ interface AIChatBotProps {
 }
 
 const STARTER_PROMPTS = [
-  {
-    icon: '☕',
-    label: 'Paid 450 cash for tea & samosas',
-    prompt: 'Paid 450 cash for tea and samosas for meeting'
-  },
-  {
-    icon: '🎓',
-    label: 'Received 3000 dues via Google Pay',
-    prompt: 'Received 3000 dues from batch via Google Pay'
-  },
-  {
-    icon: '🎤',
-    label: 'Purchased 2 wireless mic sets for 5500',
-    prompt: 'Purchased 2 wireless mic sets for 5500 from bank'
-  },
   {
     icon: '📊',
     label: 'Senior CA Financial Health Review',
@@ -431,12 +419,12 @@ export const AIChatBot: React.FC<AIChatBotProps> = ({
     }, 0);
 
     return {
-      cashBalance: `₹${cashBalance.toLocaleString('en-IN')}`,
-      bankBalance: `₹${bankBalance.toLocaleString('en-IN')}`,
-      totalIncome: `₹${totalIncome.toLocaleString('en-IN')}`,
-      totalExpenses: `₹${totalExpenses.toLocaleString('en-IN')}`,
-      netSurplus: `₹${(totalIncome - totalExpenses).toLocaleString('en-IN')}`,
-      totalDuesOutstanding: `₹${totalDuesOutstanding.toLocaleString('en-IN')}`
+      cashBalance: `₹${(Number(cashBalance) || 0).toLocaleString('en-IN')}`,
+      bankBalance: `₹${(Number(bankBalance) || 0).toLocaleString('en-IN')}`,
+      totalIncome: `₹${(Number(totalIncome) || 0).toLocaleString('en-IN')}`,
+      totalExpenses: `₹${(Number(totalExpenses) || 0).toLocaleString('en-IN')}`,
+      netSurplus: `₹${(Number(totalIncome - totalExpenses) || 0).toLocaleString('en-IN')}`,
+      totalDuesOutstanding: `₹${(Number(totalDuesOutstanding) || 0).toLocaleString('en-IN')}`
     };
   };
 
@@ -1678,9 +1666,7 @@ export const AIChatBot: React.FC<AIChatBotProps> = ({
                                   </div>
                                 </div>
                               ) : (() => {
-                                const prevMsg = idx > 0 ? messages[idx - 1] : null;
-                                const combinedText = prevMsg && prevMsg.role === 'user' ? `${prevMsg.text}\n${msg.text}` : msg.text;
-                                const activeSuggestedEntry = msg.suggestedEntry || (!isUser ? deriveSuggestedEntry(combinedText, accounts) : null);
+                                const activeSuggestedEntry = msg.suggestedEntry;
 
                                 return (
                                   <>

@@ -367,95 +367,97 @@ ${JSON.stringify(accounts.map((a: any) => ({ id: a.id, name: a.name, type: a.typ
       // When thinkMode is false (Turbo Flash Default), use LOW reasoning for sudden sub-2s responses!
       const activeThinkingLevel = thinkMode ? ThinkingLevel.HIGH : ThinkingLevel.LOW;
 
-      // Robust, high-speed fallback candidate models
-      const candidateModels = ['gemini-3.1-flash-lite', 'gemini-3.8-flash'];
+      // Primary: gemini-2.5-flash, Fallback: gemini-2.0-flash
+      const candidateModels = ['gemini-2.5-flash', 'gemini-2.0-flash'];
       let responseData: any = null;
 
       for (const modelName of candidateModels) {
-        let attempts = 0;
-        const maxAttempts = 2;
-
-        while (attempts < maxAttempts) {
-          attempts++;
-          try {
-            const response = await ai.models.generateContent({
-              model: modelName,
-              contents,
-              config: {
-                systemInstruction,
-                responseMimeType: 'application/json',
-                thinkingConfig: {
-                  thinkingLevel: activeThinkingLevel
-                },
-                responseSchema: {
-                  type: Type.OBJECT,
-                  properties: {
-                    reply: {
-                      type: Type.STRING,
-                      description: 'Comprehensive markdown explanation with CA rationale and audit narration.'
-                    },
-                    hasSuggestedEntry: {
-                      type: Type.BOOLEAN,
-                      description: 'True when payment method, amount, and accounts are determined.'
-                    },
-                    suggestedEntry: {
-                      type: Type.OBJECT,
-                      properties: {
-                        debitAccountId: { type: Type.STRING, description: "Account ID from active accounts list (e.g., '7', '8', '1', '2')" },
-                        debitAccountName: { type: Type.STRING, description: 'Human-readable debit account name' },
-                        debitAccountType: { type: Type.STRING, enum: ['Asset', 'Liability', 'Equity', 'Income', 'Expense'] },
-                        creditAccountId: { type: Type.STRING, description: "Account ID from active accounts list (e.g., '1', '2', '4', '12')" },
-                        creditAccountName: { type: Type.STRING, description: 'Human-readable credit account name' },
-                        creditAccountType: { type: Type.STRING, enum: ['Asset', 'Liability', 'Equity', 'Income', 'Expense'] },
-                        amount: { type: Type.NUMBER, description: 'Numeric transaction value in INR' },
-                        narration: { type: Type.STRING, description: 'Standard journal narration starting with Being...' },
-                        date: { type: Type.STRING, description: 'ISO date YYYY-MM-DD' }
-                      }
-                    },
-                    followUpSuggestions: {
-                      type: Type.ARRAY,
-                      items: { type: Type.STRING },
-                      description: '2-3 quick suggestion chips for the UI.'
-                    },
-                    thinkingProcess: {
-                      type: Type.STRING,
-                      description: 'Sharp CA forensic reasoning step-by-step.'
-                    },
-                    memoryToSave: {
-                      type: Type.STRING,
-                      description: 'Extracted rule to store in Memory Bank if instructed, else empty string.'
+        try {
+          const response = await ai.models.generateContent({
+            model: modelName,
+            contents,
+            config: {
+              systemInstruction: systemInstruction,
+              responseMimeType: 'application/json',
+              thinkingConfig: {
+                thinkingLevel: activeThinkingLevel
+              },
+              responseSchema: {
+                type: Type.OBJECT,
+                properties: {
+                  reply: { type: Type.STRING, description: 'Short, friendly plain-English explanation (no markdown tables).' },
+                  hasSuggestedEntry: { type: Type.BOOLEAN },
+                  suggestedEntry: {
+                    type: Type.OBJECT,
+                    properties: {
+                      isCompound: { type: Type.BOOLEAN },
+                      debits: {
+                        type: Type.ARRAY,
+                        items: {
+                          type: Type.OBJECT,
+                          properties: {
+                            accountId: { type: Type.STRING },
+                            accountName: { type: Type.STRING },
+                            accountType: { type: Type.STRING },
+                            amount: { type: Type.NUMBER },
+                            isNewAccount: { type: Type.BOOLEAN }
+                          }
+                        }
+                      },
+                      credits: {
+                        type: Type.ARRAY,
+                        items: {
+                          type: Type.OBJECT,
+                          properties: {
+                            accountId: { type: Type.STRING },
+                            accountName: { type: Type.STRING },
+                            accountType: { type: Type.STRING },
+                            amount: { type: Type.NUMBER },
+                            isNewAccount: { type: Type.BOOLEAN }
+                          }
+                        }
+                      },
+                      amount: { type: Type.NUMBER, description: 'Total balanced transaction amount' },
+                      narration: { type: Type.STRING },
+                      date: { type: Type.STRING }
                     }
                   },
-                  required: ['reply', 'hasSuggestedEntry']
-                }
-              }
-            });
-
-            const responseText = response.text || '{}';
-            let parsed: any;
-            try {
-              parsed = JSON.parse(responseText.trim());
-            } catch {
-              const jsonMatch = responseText.match(/\{[\s\S]*\}/);
-              if (jsonMatch) {
-                parsed = JSON.parse(jsonMatch[0]);
-              } else {
-                parsed = {
-                  reply: responseText,
-                  hasSuggestedEntry: false
-                };
+                  followUpSuggestions: { type: Type.ARRAY, items: { type: Type.STRING } },
+                  thinkingProcess: { type: Type.STRING },
+                  memoryToSave: { type: Type.STRING }
+                },
+                required: ['reply', 'hasSuggestedEntry']
               }
             }
-
-            if (parsed && typeof parsed === 'object' && parsed.reply && typeof parsed.reply === 'string' && parsed.reply.trim().length > 0) {
-              responseData = parsed;
-              break;
+          });
+          const responseText = response.text || '{}';
+          let parsed: any;
+          try {
+            parsed = JSON.parse(responseText.trim());
+          } catch {
+            const jsonMatch = responseText.match(/\{[\s\S]*\}/);
+            if (jsonMatch) {
+              parsed = JSON.parse(jsonMatch[0]);
+            } else {
+              parsed = {
+                reply: responseText,
+                hasSuggestedEntry: false
+              };
             }
-          } catch (modelErr: any) {
-            console.log(`[AI Info] Chat on ${modelName} (attempt ${attempts}) busy or unavailable. Trying fast switch...`);
-            // Quick failover without long sleep so the user experiences sudden responses
+          }
+
+          if (parsed && typeof parsed === 'object' && parsed.reply && typeof parsed.reply === 'string' && parsed.reply.trim().length > 0) {
+            if (isGreetingOrGeneralChat(prompt)) {
+              parsed.hasSuggestedEntry = false;
+              parsed.suggestedEntry = null;
+            }
+            responseData = parsed;
             break;
           }
+        } catch (modelErr: any) {
+          console.log(`[AI Info] Chat on ${modelName} busy or unavailable. Trying fast switch...`);
+          // Quick failover without long sleep so the user experiences sudden responses
+          break;
         }
 
         if (responseData) {
@@ -484,6 +486,23 @@ ${JSON.stringify(accounts.map((a: any) => ({ id: a.id, name: a.name, type: a.typ
     }
   });
 
+  // Helper to strictly detect casual greetings, questions, or general chat
+  function isGreetingOrGeneralChat(userPrompt: string): boolean {
+    const p = (userPrompt || '').trim().toLowerCase();
+    if (!p) return true;
+    const greetingMatches = [
+      'hi', 'hello', 'hey', 'heyy', 'hiya', 'hola', 'namaste', 'halo',
+      'good morning', 'good afternoon', 'good evening', 'good day', 'greetings',
+      'who are you', 'who r u', 'what are you', 'what can you do', 'how can you help',
+      'help', 'start', 'ping', 'sup', 'yo', 'how are you', 'how r u', 'thanks', 'thank you'
+    ];
+    if (greetingMatches.includes(p)) return true;
+    if (p.length <= 40 && /^(hi|hello|hey|greetings|good\s*(morning|afternoon|evening)|thanks|thank\s*you|how\s*are\s*you|what\s*can\s*you\s*do|who\s*are\s*you)\b/i.test(p) && !/\d|₹|rs|spent|paid|received|purchased|bought|audit|entry|debit|credit/i.test(p)) {
+      return true;
+    }
+    return false;
+  }
+
   // Sudden / Instant Conversational Response Engine (Sub-15ms execution)
   function getInstantConversationalResponse(userPrompt: string, context: any) {
     const p = (userPrompt || '').trim().toLowerCase();
@@ -498,25 +517,15 @@ ${JSON.stringify(accounts.map((a: any) => ({ id: a.id, name: a.name, type: a.typ
     const orgName = 'NADA UNION LEDGER';
 
     // 1. Greetings & Introductions
-    const greetingMatches = [
-      'hi', 'hello', 'hey', 'heyy', 'hiya', 'hola', 'namaste', 'halo',
-      'good morning', 'good afternoon', 'good evening', 'good day', 'greetings',
-      'who are you', 'who r u', 'what are you', 'what can you do', 'how can you help',
-      'help', 'start', 'ping', 'sup', 'yo', 'how are you', 'how r u'
-    ];
-    
-    const isSingleGreeting = greetingMatches.includes(p) ||
-      (p.length <= 30 && /^(hi|hello|hey|greetings|good\s*(morning|afternoon|evening))\b/i.test(p) && !/\d|₹|rs|spent|paid|received|purchased|bought|audit|entry|debit|credit/i.test(p));
-
-    if (isSingleGreeting) {
+    if (isGreetingOrGeneralChat(p)) {
       return {
-        reply: `### 👋 Greetings from Gemini AI — Senior CA & Chief Financial Advisor\n\nI am your resident Chartered Accountant and Chief Financial Advisor for **NADA UNION LEDGER** (a double-entry accounting platform for class union treasurers). I'm operating in **Turbo Flash Mode** to give you immediate bookkeeping guidance, double-entry verification, and ledger health insights.\n\n#### 📊 Live Union Financial Snapshot\n* **💵 Cash in Hand:** ${cashStr}\n* **💳 Union Bank Account:** ${bankStr}\n* **📈 Net Operating Balance:** ${surplusStr}\n* **📁 Total Recorded Vouchers:** ${totalEntries} entries\n\n#### ⚡ How can I assist your ledger right now?\n* **Record Transactions:** Say *"Paid 450 cash for tea and samosas for meeting"*, *"Received 3000 dues from batch via Google Pay"*, or *"Purchased 2 wireless mic sets for 5500 from bank"*\n* **Receipt Analysis:** Click the **+** button to attach receipts, bills, or vouchers\n* **Auditing & Rules:** Ask me to audit entries, check negative balances, or explain debit/credit rules.`,
+        reply: `Hello! I'm your NADA Union CA assistant. How can I help you record or check your union ledger today?`,
         hasSuggestedEntry: false,
+        suggestedEntry: null,
         followUpSuggestions: [
-          "☕ Paid 450 cash for tea & samosas",
-          "🎓 Received 3000 dues via Google Pay",
-          "🎤 Purchased 2 wireless mic sets for 5500 from bank",
-          "📊 CA Financial Health & Audit Review"
+          "Record a new expense",
+          "Check cash balance",
+          "Help with dues"
         ]
       };
     }
@@ -526,6 +535,7 @@ ${JSON.stringify(accounts.map((a: any) => ({ id: a.id, name: a.name, type: a.typ
       return {
         reply: `You're very welcome! As your Senior CA and Chief Financial Advisor for **NADA UNION LEDGER**, I'm here to ensure your union ledger remains 100% balanced, audit-ready, and transparent under the Golden Rules of Accounting. Let me know whenever you have more vouchers to record or balances to review!`,
         hasSuggestedEntry: false,
+        suggestedEntry: null,
         followUpSuggestions: [
           "📊 Show Balance Sheet Summary",
           "📝 Record New Expense",

@@ -739,17 +739,17 @@ export function LedgerSection({
                     }
                   }}
                   disabled={isGeneratingPdf}
-                  className="w-full inline-flex items-center justify-center gap-1.5 px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-800/60 disabled:text-indigo-300 text-white rounded-xl text-xs font-bold transition-all shadow-md cursor-pointer disabled:cursor-not-allowed"
+                  className="w-full inline-flex items-center justify-center gap-1.5 px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-400 disabled:text-indigo-200 text-white rounded-xl text-xs font-bold transition-all shadow-md cursor-pointer disabled:cursor-not-allowed"
                 >
                   {isGeneratingPdf ? (
                     <>
                       <span className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                      Saving PDF...
+                      Generating PDF...
                     </>
                   ) : (
                     <>
-                      <Download size={15} />
-                      Save as PDF
+                      <Printer size={15} />
+                      Print / Save as PDF
                     </>
                   )}
                 </button>

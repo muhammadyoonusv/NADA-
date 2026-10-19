@@ -522,13 +522,7 @@ export function HomePage({
             <div className="w-10 h-10 sm:w-11 sm:h-11 rounded-xl bg-[#FFE4C4] text-[#EA580C] flex items-center justify-center shrink-0 shadow-2xs group-hover:scale-105 transition-transform">
               <Users size={20} className="sm:w-[22px] sm:h-[22px]" />
             </div>
-            <button 
-              type="button"
-              className="w-7 h-7 rounded-full bg-white/80 group-hover:bg-white text-amber-700 flex items-center justify-center shadow-3xs cursor-pointer transition-all"
-              title="Manage Student Dues"
-            >
-              <ChevronRight size={15} />
-            </button>
+            {/* Button removed */}
           </div>
 
           <div className="mt-3">

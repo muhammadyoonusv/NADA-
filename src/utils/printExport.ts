@@ -77,6 +77,12 @@ export async function exportElementToPdf({
             (tbl as HTMLElement).style.maxWidth = '100%';
             (tbl as HTMLElement).style.tableLayout = 'auto';
             (tbl as HTMLElement).style.borderCollapse = 'collapse';
+            (tbl as HTMLElement).style.wordBreak = 'break-word';
+            // Ensure rows don't break inside tables
+            tbl.querySelectorAll('tr').forEach(tr => {
+              (tr as HTMLElement).style.pageBreakInside = 'avoid';
+              (tr as HTMLElement).style.breakInside = 'avoid';
+            });
           });
 
           // Expand any horizontal scroll wrappers so table columns are never clipped
@@ -113,7 +119,7 @@ export async function exportElementToPdf({
     const containerRect = element.getBoundingClientRect();
     const scaleRatioY = canvasHeight / (element.scrollHeight || containerRect.height);
 
-    const breakAvoidSelectors = 'tr, .card, .summary-card, .summary-cards, .verification-block, .sign-row, .statement-header, .stat-card, [data-break-avoid="true"]';
+    const breakAvoidSelectors = 'tr, tbody tr, .card, .summary-card, .summary-cards, .verification-block, .sign-row, .statement-header, .stat-card, [data-break-avoid="true"]';
     const breakAvoidEls = Array.from(element.querySelectorAll<HTMLElement>(breakAvoidSelectors));
 
     let sourceY = 0;
