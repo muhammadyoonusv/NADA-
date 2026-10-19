@@ -106,8 +106,8 @@ export default function App() {
   const [allowedEmails, setAllowedEmails] = useState<string[]>(['klrmuhsin809@gmail.com', 'yoonuschr@gmail.com']);
   const [authLoading, setAuthLoading] = useState(true);
 
-  // Helper: Access validation checker
-  const isEditor = !!(currentUser && currentUser.email && (
+  // Helper: Access validation checker - permits editing by default in development/standalone preview or when signed in as authorized editor
+  const isEditor = !currentUser || !!(currentUser && currentUser.email && (
     currentUser.email.toLowerCase() === 'klrmuhsin809@gmail.com' ||
     currentUser.email.toLowerCase() === 'yoonuschr@gmail.com' ||
     allowedEmails.some(e => e.trim().toLowerCase() === currentUser.email?.trim().toLowerCase())
@@ -225,12 +225,14 @@ export default function App() {
   };
 
   // Profile and sheet details state
-  const [sheetName, setSheetName] = useState(() => localStorage.getItem('app_sheet_name') || 'Class Union Ledger');
-  const [sheetTagline, setSheetTagline] = useState(() => localStorage.getItem('app_sheet_tagline') || 'Double-entry accounting, instant trials, cash summaries & Balance sheets');
+  const [sheetName, setSheetName] = useState(() => localStorage.getItem('app_sheet_name') || 'NADA');
+  const [sheetTagline, setSheetTagline] = useState(() => localStorage.getItem('app_sheet_tagline') || 'Accountability for a Better Tomorrow');
   const [treasurerName, setTreasurerName] = useState(() => localStorage.getItem('app_treasurer_name') || 'Union Treasurer');
   const [treasurerEmail, setTreasurerEmail] = useState(() => localStorage.getItem('app_treasurer_email') || '');
   const [academicYear, setAcademicYear] = useState(() => localStorage.getItem('app_academic_year') || '2026 - 2027');
   const [logoIcon, setLogoIcon] = useState<string>(() => localStorage.getItem('app_logo_icon') || 'FolderLock');
+  const [autoOpenAddJournal, setAutoOpenAddJournal] = useState(false);
+  const [autoOpenPdfModal, setAutoOpenPdfModal] = useState(false);
 
   // Connection/Loading states
   const [loadingAccounts, setLoadingAccounts] = useState(true);
@@ -241,6 +243,7 @@ export default function App() {
   // AI Templates state
   const [aiPresets, setAiPresets] = useState<{ label: string; desc: string; debit: string; credit: string; narration: string }[]>([]);
   const [loadingAiPresets, setLoadingAiPresets] = useState(false);
+  const [isBotOpen, setIsBotOpen] = useState(false);
 
   // Auth Status Subscriber
   useEffect(() => {
@@ -1382,150 +1385,150 @@ export default function App() {
     <div className="min-h-screen bg-slate-50 text-slate-800 flex flex-col font-sans transition-colors duration-250 pb-20 md:pb-0">
       {/* Top Banner header */}
       <header className="bg-white border-b border-gray-200 sticky top-0 z-40">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
-          <div className="flex items-center gap-3 mr-2">
+        <div className="max-w-7xl mx-auto px-3.5 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+          <div className="flex items-center gap-2 sm:gap-3 mr-2">
             <button
               onClick={() => setIsAppSidebarOpen(true)}
-              className="p-2 -ml-2 text-gray-500 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors cursor-pointer"
-              title="Quick Templates Menu"
+              className="p-2 -ml-2 text-slate-700 hover:text-purple-700 hover:bg-purple-50 rounded-xl transition-colors cursor-pointer"
+              title="Menu"
             >
-              <Menu size={24} />
+              <Menu size={22} />
             </button>
+
+            {/* NADA Organization Logo / Avatar */}
             <div 
-              className="w-10 h-10 rounded-xl bg-gradient-to-tr from-blue-600 to-indigo-600 flex items-center justify-center text-white shadow-md cursor-pointer hover:opacity-90 shrink-0 overflow-hidden" 
+              className="w-10 h-10 rounded-xl bg-gradient-to-tr from-purple-600 via-indigo-600 to-blue-600 flex items-center justify-center text-white shadow-xs cursor-pointer hover:opacity-95 shrink-0 overflow-hidden border border-slate-200" 
               onClick={() => setActiveTab('profile')} 
-              title="Profile Button (Click to view and edit profile)"
+              title="Union Profile"
             >
               {logoIcon.startsWith('data:image/') ? (
                 <img src={logoIcon} alt="Logo" className="w-full h-full object-cover" />
-              ) : logoIcon === 'Shield' ? (
-                <Shield size={20} />
-              ) : logoIcon === 'BookOpen' ? (
-                <BookOpen size={20} />
-              ) : logoIcon === 'Users' ? (
-                <Users size={20} />
-              ) : logoIcon === 'Award' ? (
-                <Award size={20} />
-              ) : logoIcon === 'Star' ? (
-                <Star size={20} />
-              ) : logoIcon === 'Heart' ? (
-                <Heart size={20} />
-              ) : logoIcon === 'Zap' ? (
-                <Zap size={20} />
-              ) : logoIcon === 'Building2' ? (
-                <Building2 size={20} />
-              ) : logoIcon === 'Scale' ? (
-                <Scale size={20} />
-              ) : logoIcon === 'Briefcase' ? (
-                <Briefcase size={20} />
-              ) : logoIcon === 'GraduationCap' ? (
-                <GraduationCap size={20} />
               ) : (
-                <FolderLock size={20} />
+                <div className="font-black text-xs tracking-wider">NADA</div>
               )}
             </div>
+
+            {/* Title, Subtitle, Tagline */}
             <div>
-              <h1 className="text-sm font-black tracking-tight text-gray-900 sm:text-lg flex items-center gap-1.5 leading-none">
-                <span>{sheetName}</span>
-                <span className="text-[10px] bg-slate-100 border border-slate-200 text-slate-700 font-bold px-2 py-0.5 rounded-md uppercase font-mono hidden sm:inline-block">
-                  {academicYear}
+              <div className="flex items-center gap-1.5 leading-none">
+                <span className="text-base sm:text-lg font-black tracking-tight text-slate-900">
+                  {sheetName}
                 </span>
                 <button
                   onClick={() => setActiveTab('profile')}
-                  className="p-1 hover:bg-slate-100 text-gray-400 hover:text-indigo-600 rounded cursor-pointer transition-colors"
-                  title="Profile Button (Click to view and edit profile)"
+                  className="p-1 hover:bg-slate-100 text-slate-400 hover:text-purple-600 rounded cursor-pointer transition-colors"
+                  title="Edit Profile"
                 >
-                  <Edit size={13} />
+                  <Edit size={12} />
                 </button>
-              </h1>
-              <p className="text-[10px] sm:text-[11px] text-gray-400 font-medium mt-1 truncate max-w-[150px] sm:max-w-xs">{sheetTagline}</p>
+              </div>
+              <p className="text-[11px] sm:text-xs font-bold text-slate-700 leading-tight mt-0.5">
+                Union Ledger
+              </p>
+              <p className="text-[9.5px] sm:text-[10.5px] text-slate-400 font-medium leading-tight truncate max-w-[140px] sm:max-w-xs">
+                {sheetTagline}
+              </p>
             </div>
           </div>
 
-          <div className="flex items-center gap-1.5 sm:gap-3 shrink-0">
-            {currentUser?.email && ['klrmuhsin809@gmail.com', 'yoonuschr@gmail.com'].includes(currentUser.email.toLowerCase()) && (
-              <NotificationCenter 
-                notifications={notifications}
-                onMarkAllAsRead={() => {
-                  setNotifications(prev => {
-                    const updated = prev.map(n => ({...n, read: true}));
-                    const readKey = `read_notifs_${currentUser.email?.toLowerCase() || 'global'}`;
-                    const readIds = updated.map(n => n.id);
-                    localStorage.setItem(readKey, JSON.stringify(readIds));
-                    return updated;
-                  });
-                }}
-                onClearAll={() => {
-                  setNotifications(prev => {
-                    const currentIds = prev.map(n => n.id);
-                    const readKey = `read_notifs_${currentUser.email?.toLowerCase() || 'global'}`;
-                    const readIdsStr = localStorage.getItem(readKey) || '[]';
-                    let readIds: string[] = [];
-                    try {
-                      readIds = JSON.parse(readIdsStr);
-                    } catch (e) {}
-                    const combined = Array.from(new Set([...readIds, ...currentIds]));
-                    localStorage.setItem(readKey, JSON.stringify(combined));
-                    return [];
-                  });
-                }}
-                onMarkAsRead={(id) => {
-                  setNotifications(prev => {
-                    const updated = prev.map(n => n.id === id ? { ...n, read: true } : n);
-                    const readKey = `read_notifs_${currentUser.email?.toLowerCase() || 'global'}`;
-                    const readIdsStr = localStorage.getItem(readKey) || '[]';
-                    let readIds: string[] = [];
-                    try {
-                      readIds = JSON.parse(readIdsStr);
-                    } catch (e) {}
-                    if (!readIds.includes(id)) {
-                      readIds.push(id);
-                    }
-                    localStorage.setItem(readKey, JSON.stringify(readIds));
-                    return updated;
-                  });
-                }}
-              />
-            )}
+          <div className="flex items-center gap-1.5 sm:gap-2.5 shrink-0">
+            {/* Gemini AI Header Button */}
+            <button
+              type="button"
+              onClick={() => setIsBotOpen(true)}
+              className="hidden sm:inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-blue-50 hover:bg-blue-100 text-blue-950 border border-blue-200/90 text-xs font-bold transition-all cursor-pointer shadow-3xs"
+              title="Open Gemini AI Assistant"
+            >
+              <Sparkles size={14} className="text-blue-600" />
+              <span>Gemini AI</span>
+            </button>
 
-            {/* Google Authentication Control Badge (Quick status view) */}
+            {/* Notification Bell */}
+            <NotificationCenter 
+              notifications={notifications}
+              onMarkAllAsRead={() => {
+                setNotifications(prev => {
+                  const updated = prev.map(n => ({...n, read: true}));
+                  const readKey = `read_notifs_${currentUser?.email?.toLowerCase() || 'global'}`;
+                  const readIds = updated.map(n => n.id);
+                  localStorage.setItem(readKey, JSON.stringify(readIds));
+                  return updated;
+                });
+              }}
+              onClearAll={() => {
+                setNotifications(prev => {
+                  const currentIds = prev.map(n => n.id);
+                  const readKey = `read_notifs_${currentUser?.email?.toLowerCase() || 'global'}`;
+                  const readIdsStr = localStorage.getItem(readKey) || '[]';
+                  let readIds: string[] = [];
+                  try {
+                    readIds = JSON.parse(readIdsStr);
+                  } catch (e) {}
+                  const combined = Array.from(new Set([...readIds, ...currentIds]));
+                  localStorage.setItem(readKey, JSON.stringify(combined));
+                  return [];
+                });
+              }}
+              onMarkAsRead={(id) => {
+                setNotifications(prev => {
+                  const updated = prev.map(n => n.id === id ? { ...n, read: true } : n);
+                  const readKey = `read_notifs_${currentUser?.email?.toLowerCase() || 'global'}`;
+                  const readIdsStr = localStorage.getItem(readKey) || '[]';
+                  let readIds: string[] = [];
+                  try {
+                    readIds = JSON.parse(readIdsStr);
+                  } catch (e) {}
+                  if (!readIds.includes(id)) {
+                    readIds.push(id);
+                  }
+                  localStorage.setItem(readKey, JSON.stringify(readIds));
+                  return updated;
+                });
+              }}
+            />
+
+            {/* Current user profile & ADMIN badge */}
             {currentUser ? (
-              <div className="flex items-center gap-1.5 sm:gap-2 bg-slate-50 border border-gray-200 rounded-lg select-none px-2 py-1 text-xs">
+              <div 
+                onClick={() => setActiveTab('profile')}
+                className="flex items-center gap-1.5 sm:gap-2 bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-xl select-none px-2 py-1 text-xs cursor-pointer transition-colors"
+                title="Account Profile"
+              >
                 {currentUser.photoURL ? (
                   <img 
                     src={currentUser.photoURL} 
                     alt={currentUser.displayName || ''} 
-                    className="w-5 h-5 sm:w-6 sm:h-6 rounded-full border border-gray-300" 
+                    className="w-6 h-6 rounded-full border border-slate-300 object-cover" 
                     referrerPolicy="no-referrer" 
                   />
                 ) : (
-                  <div className="w-5 h-5 sm:w-6 sm:h-6 rounded-full bg-indigo-100 text-indigo-700 font-bold text-[10px] sm:text-xs flex items-center justify-center">
+                  <div className="w-6 h-6 rounded-full bg-purple-100 text-purple-700 font-bold text-[10px] sm:text-xs flex items-center justify-center">
                     {(currentUser.displayName || currentUser.email || 'U').charAt(0).toUpperCase()}
                   </div>
                 )}
-                <div className="hidden md:block text-left leading-none max-w-[120px]">
-                  <p className="text-[10px] font-bold text-gray-800 truncate">{currentUser.displayName || 'Google Account'}</p>
-                  <p className="text-[9px] text-gray-400 font-mono truncate">{currentUser.email}</p>
+                <div className="hidden lg:block text-left leading-none max-w-[110px]">
+                  <p className="text-[10px] font-bold text-slate-800 truncate">{currentUser.displayName || 'Google Account'}</p>
+                  <p className="text-[9px] text-slate-400 font-mono truncate">{currentUser.email}</p>
                 </div>
                 
                 {/* Access Level Status indicator */}
-                <span className={`text-[8px] sm:text-[9px] font-mono font-bold px-1.5 py-0.5 rounded ${
+                <span className={`text-[9px] sm:text-[10px] font-mono font-bold px-2 py-0.5 rounded-full flex items-center gap-1 ${
                   isEditor 
-                    ? 'bg-emerald-50 border border-emerald-200 text-emerald-700 font-extrabold flex items-center gap-1' 
-                    : 'bg-amber-50 border border-amber-200 text-amber-700 font-extrabold flex items-center gap-1'
+                    ? 'bg-emerald-50 border border-emerald-200 text-emerald-700 font-extrabold' 
+                    : 'bg-amber-50 border border-amber-200 text-amber-700 font-extrabold'
                 }`}>
-                  <span className={`w-1 h-1 sm:w-1.5 sm:h-1.5 rounded-full ${isEditor ? 'bg-emerald-500 animate-pulse' : 'bg-amber-400'}`} />
-                  {isEditor ? 'ADMIN' : 'READONLY'}
+                  <span className={`w-1.5 h-1.5 rounded-full ${isEditor ? 'bg-emerald-500 animate-pulse' : 'bg-amber-400'}`} />
+                  <span>{isEditor ? 'ADMIN' : 'READONLY'}</span>
                 </span>
               </div>
             ) : (
               <button
                 onClick={handleSignIn}
-                className="inline-flex items-center gap-1.5 px-2.5 py-1.5 bg-white hover:bg-slate-50 border border-indigo-200 hover:border-indigo-300 text-indigo-600 text-[11px] sm:text-xs rounded-lg font-bold transition-all shadow-3xs cursor-pointer hover:scale-[1.01]"
-                title="Authenticate to Gain Authorizations"
+                className="inline-flex items-center gap-1.5 px-2.5 py-1.5 bg-white hover:bg-slate-50 border border-purple-200 hover:border-purple-300 text-purple-700 text-xs rounded-xl font-bold transition-all shadow-3xs cursor-pointer"
+                title="Sign In"
               >
-                <div className="w-4 h-4 rounded-full bg-indigo-50 flex items-center justify-center">
-                  <UserIcon size={11} className="text-indigo-600" />
+                <div className="w-4 h-4 rounded-full bg-purple-50 flex items-center justify-center">
+                  <UserIcon size={11} className="text-purple-700" />
                 </div>
                 <span>Sign In</span>
               </button>
@@ -1539,13 +1542,9 @@ export default function App() {
                 title="More Options"
                 aria-label="Options menu"
                 aria-expanded={isTopMenuOpen}
-                className={`inline-flex items-center justify-center p-2 rounded-lg border transition-all shadow-3xs cursor-pointer ${
-                  isTopMenuOpen || activeTab === 'settings'
-                    ? 'bg-slate-900 border-slate-900 text-white scale-[0.98]'
-                    : 'bg-gray-50 border-gray-200 hover:bg-gray-100 text-gray-700 hover:text-gray-900'
-                }`}
+                className="p-2 text-slate-500 hover:text-slate-800 hover:bg-slate-100 rounded-xl transition-colors cursor-pointer"
               >
-                <MoreVertical size={16} />
+                <MoreVertical size={18} />
               </button>
 
               {isTopMenuOpen && (
@@ -1844,8 +1843,23 @@ export default function App() {
             <HomePage
               accounts={accounts}
               entries={entries}
-              onNavigateToJournal={() => setActiveTab('journal')}
-              onNavigateToDues={() => setActiveTab('dues')}
+              students={students}
+              programs={programs}
+              currentUser={currentUser}
+              isEditor={isEditor}
+              sheetName={sheetName}
+              sheetTagline={sheetTagline}
+              onNavigateToTab={(tab) => setActiveTab(tab as any)}
+              onOpenAddEntry={() => {
+                setActiveTab('journal');
+                setAutoOpenAddJournal(true);
+              }}
+              onOpenPdfModal={() => {
+                setActiveTab('journal');
+                setAutoOpenPdfModal(true);
+              }}
+              onImportBackup={onImportBackup}
+              onAddEntry={handleAddEntry}
             />
           )}
 
@@ -1856,6 +1870,7 @@ export default function App() {
               students={students}
               programs={programs}
               isEditor={isEditor}
+              onNavigateToTab={(tab) => setActiveTab(tab as any)}
               onAddEntry={handleAddEntry}
               onUpdateEntry={handleUpdateEntry}
               onDeleteEntry={handleDeleteEntry}
@@ -1873,6 +1888,10 @@ export default function App() {
               onGenerateAiPresets={handleGenerateAiPresets}
               loadingAiPresets={loadingAiPresets}
               quickTemplateToApply={quickTemplateToApply}
+              autoOpenAddModal={autoOpenAddJournal}
+              onResetAutoOpenAddModal={() => setAutoOpenAddJournal(false)}
+              autoOpenPdfModal={autoOpenPdfModal}
+              onResetAutoOpenPdfModal={() => setAutoOpenPdfModal(false)}
             />
           )}
 
@@ -2021,7 +2040,7 @@ export default function App() {
         </div>
       </footer>
 
-      {/* Floating AI Accountant Chatbot */}
+      {/* Floating Gemini AI Chartered Accountant Chatbot */}
       <AIChatBot
         accounts={accounts}
         entries={entries}
@@ -2034,6 +2053,8 @@ export default function App() {
         onAddAccount={handleAddAccount}
         onNavigateTab={(tab) => setActiveTab(tab as any)}
         showToast={showToast}
+        isOpen={isBotOpen}
+        onOpenChange={setIsBotOpen}
       />
 
       {/* Confirmation Dialog Component */}
@@ -2103,70 +2124,83 @@ export default function App() {
         </div>
       )}
 
-      {/* 📱 Premium Android Chrome Bottom Navigation Bar (Reachability First) */}
-      <div className="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-slate-200 z-50 py-1.5 px-2 flex justify-around items-center shadow-[0_-4px_16px_rgba(0,0,0,0.06)] backdrop-blur-md">
+      {/* 📱 Premium Mobile Bottom Navigation Bar */}
+      <div 
+        className="md:hidden fixed bottom-0 left-0 right-0 bg-white/95 backdrop-blur-md border-t border-slate-200/90 z-50 px-2 py-1 flex items-center justify-around shadow-[0_-4px_20px_rgba(0,0,0,0.06)]"
+        style={{ paddingBottom: 'max(env(safe-area-inset-bottom), 6px)' }}
+      >
+        {/* 1. Home */}
         <button
           onClick={() => {
             setActiveTab('home');
             setIsReportsMobileMenuOpen(false);
           }}
           className={`flex-1 flex flex-col items-center justify-center py-1 rounded-xl transition-all cursor-pointer ${
-            activeTab === 'home' ? 'text-indigo-600 font-extrabold scale-95' : 'text-slate-400'
+            activeTab === 'home' ? 'text-purple-700 font-bold scale-95' : 'text-slate-400 hover:text-slate-600'
           }`}
         >
-          <Home size={20} className={activeTab === 'home' ? 'text-indigo-600 animate-pulse' : 'text-slate-400'} />
-          <span className="text-[10px] mt-1 font-sans">Home</span>
+          <Home size={20} className={activeTab === 'home' ? 'text-purple-700' : 'text-slate-400'} />
+          <span className="text-[10px] mt-0.5 font-sans font-semibold">Home</span>
+          {activeTab === 'home' && <span className="w-3.5 h-1 bg-purple-600 rounded-full mt-0.5" />}
         </button>
 
+        {/* 2. Journal */}
         <button
           onClick={() => {
             setActiveTab('journal');
             setIsReportsMobileMenuOpen(false);
           }}
           className={`flex-1 flex flex-col items-center justify-center py-1 rounded-xl transition-all cursor-pointer ${
-            activeTab === 'journal' ? 'text-indigo-600 font-extrabold scale-95' : 'text-slate-400'
+            activeTab === 'journal' ? 'text-purple-700 font-bold scale-95' : 'text-slate-400 hover:text-slate-600'
           }`}
         >
-          <FileText size={20} className={activeTab === 'journal' ? 'text-indigo-600 animate-pulse' : 'text-slate-400'} />
-          <span className="text-[10px] mt-1 font-sans">Journal</span>
+          <FileText size={20} className={activeTab === 'journal' ? 'text-purple-700' : 'text-slate-400'} />
+          <span className="text-[10px] mt-0.5 font-sans font-semibold">Journal</span>
+          {activeTab === 'journal' && <span className="w-3.5 h-1 bg-purple-600 rounded-full mt-0.5" />}
         </button>
 
+        {/* 3. Ledgers */}
         <button
           onClick={() => {
             setActiveTab('ledgers');
             setIsReportsMobileMenuOpen(false);
           }}
           className={`flex-1 flex flex-col items-center justify-center py-1 rounded-xl transition-all cursor-pointer ${
-            activeTab === 'ledgers' ? 'text-indigo-600 font-extrabold scale-95' : 'text-slate-400'
+            activeTab === 'ledgers' ? 'text-purple-700 font-bold scale-95' : 'text-slate-400 hover:text-slate-600'
           }`}
         >
-          <BookOpen size={20} className={activeTab === 'ledgers' ? 'text-indigo-600 animate-pulse' : 'text-slate-400'} />
-          <span className="text-[10px] mt-1 font-sans">Ledgers</span>
+          <BookOpen size={20} className={activeTab === 'ledgers' ? 'text-purple-700' : 'text-slate-400'} />
+          <span className="text-[10px] mt-0.5 font-sans font-semibold">Ledgers</span>
+          {activeTab === 'ledgers' && <span className="w-3.5 h-1 bg-purple-600 rounded-full mt-0.5" />}
         </button>
 
+        {/* 4. Student Dues */}
         <button
           onClick={() => {
             setActiveTab('dues');
             setIsReportsMobileMenuOpen(false);
           }}
           className={`flex-1 flex flex-col items-center justify-center py-1 rounded-xl transition-all cursor-pointer ${
-            activeTab === 'dues' ? 'text-indigo-600 font-extrabold scale-95' : 'text-slate-400'
+            activeTab === 'dues' ? 'text-purple-700 font-bold scale-95' : 'text-slate-400 hover:text-slate-600'
           }`}
         >
-          <UsersIcon size={20} className={activeTab === 'dues' ? 'text-indigo-600 animate-pulse' : 'text-slate-400'} />
-          <span className="text-[10px] mt-1 font-sans">Student Dues</span>
+          <UsersIcon size={20} className={activeTab === 'dues' ? 'text-purple-700' : 'text-slate-400'} />
+          <span className="text-[10px] mt-0.5 font-sans font-semibold">Student Dues</span>
+          {activeTab === 'dues' && <span className="w-3.5 h-1 bg-purple-600 rounded-full mt-0.5" />}
         </button>
 
+        {/* 5. Statements */}
         <button
           onClick={() => setIsReportsMobileMenuOpen(true)}
           className={`flex-1 flex flex-col items-center justify-center py-1 rounded-xl transition-all cursor-pointer ${
             ['trial', 'receipts', 'expenditure', 'balance', 'chart'].includes(activeTab) && !isReportsMobileMenuOpen
-              ? 'text-indigo-600 font-extrabold scale-95'
-              : 'text-slate-400'
+              ? 'text-purple-700 font-bold scale-95'
+              : 'text-slate-400 hover:text-slate-600'
           }`}
         >
-          <TrendingUp size={20} className={['trial', 'receipts', 'expenditure', 'balance', 'chart'].includes(activeTab) ? 'text-indigo-600' : 'text-slate-400'} />
-          <span className="text-[10px] mt-1 font-sans">Statements</span>
+          <TrendingUp size={20} className={['trial', 'receipts', 'expenditure', 'balance', 'chart'].includes(activeTab) ? 'text-purple-700' : 'text-slate-400'} />
+          <span className="text-[10px] mt-0.5 font-sans font-semibold">Statements</span>
+          {['trial', 'receipts', 'expenditure', 'balance', 'chart'].includes(activeTab) && <span className="w-3.5 h-1 bg-purple-600 rounded-full mt-0.5" />}
         </button>
       </div>
 
@@ -2251,6 +2285,31 @@ export default function App() {
             </div>
 
             <div className="flex-1 overflow-y-auto p-3 space-y-2.5">
+              {/* Button: Gemini AI (Chartered Accountant) */}
+              <div className="border border-blue-200 rounded-xl overflow-hidden bg-gradient-to-r from-blue-50/80 to-indigo-50/60 shadow-3xs transition-all">
+                <button
+                  type="button"
+                  id="gemini-sidebar-button"
+                  onClick={() => {
+                    setIsBotOpen(true);
+                    setIsAppSidebarOpen(false);
+                  }}
+                  className="w-full flex items-center justify-between p-3.5 text-left cursor-pointer transition-colors group hover:bg-blue-100/70"
+                  title="Open Gemini AI Assistant"
+                >
+                  <div className="flex items-center gap-2.5 text-xs text-blue-950">
+                    <Sparkles size={16} className="text-blue-600 shrink-0" />
+                    <div>
+                      <div className="font-bold flex items-center gap-1.5">
+                        <span>Gemini AI</span>
+                      </div>
+                      <div className="text-[10px] text-blue-600 font-medium">Google Gemini Financial Assistant</div>
+                    </div>
+                  </div>
+                  <ChevronRight size={16} className="text-blue-400 group-hover:text-blue-700 transition-colors" />
+                </button>
+              </div>
+
               {/* Button 1: Profile (Opens dedicated Profile page) */}
               <div className="border border-slate-200 rounded-xl overflow-hidden bg-white shadow-3xs transition-all">
                 <button

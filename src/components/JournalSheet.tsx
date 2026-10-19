@@ -3,12 +3,17 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { jsPDF } from 'jspdf';
 import html2canvas from 'html2canvas-pro';
 import { Account, JournalEntry, Student, Program, AccountType } from '../types';
-import { FilePlus2, Trash2, Download, Upload, RefreshCcw, Search, PlusCircle, Sparkles, Filter, Info, Edit, ArrowDownUp, Printer, ShieldCheck, FileCheck, CheckCircle2, Paperclip, File, Eye, X, ExternalLink, FileText } from 'lucide-react';
+import { FilePlus2, Trash2, Download, Upload, RefreshCcw, Search, PlusCircle, Sparkles, Filter, Info, Edit, ArrowDownUp, Printer, ShieldCheck, FileCheck, CheckCircle2, Paperclip, File, Eye, X, ExternalLink, FileText, ArrowLeftRight, Users, Plus } from 'lucide-react';
 import { getTrialBalance, getReceiptsAndPaymentsSum, getBalanceSheet, getIncomeAndExpenditure, getAccountBalances, resolveAccountName } from '../utils/accounting';
+import { DateRangeFilter } from './DateRangeFilter';
+import { StatementPaperHeader } from './StatementPaperHeader';
+import { VerificationBlock } from './VerificationBlock';
+import { DatePreset, filterEntriesByDateRange, generateStatementFilename, getPeriodDescription } from '../utils/dateFilter';
+import { exportElementToPdf, triggerNativePrint } from '../utils/printExport';
 
 interface JournalSheetProps {
   accounts: Account[];
@@ -33,6 +38,11 @@ interface JournalSheetProps {
   onGenerateAiPresets?: () => Promise<void>;
   loadingAiPresets?: boolean;
   quickTemplateToApply?: { template: { debit: string; credit: string; narration: string }; timestamp: number } | null;
+  autoOpenAddModal?: boolean;
+  onResetAutoOpenAddModal?: () => void;
+  autoOpenPdfModal?: boolean;
+  onResetAutoOpenPdfModal?: () => void;
+  onNavigateToTab?: (tab: string) => void;
 }
 
 const compressImage = (file: File): Promise<{ base64: string; size: number }> => {
@@ -115,12 +125,51 @@ export function JournalSheet({
   onGenerateAiPresets,
   loadingAiPresets = false,
   quickTemplateToApply,
+  autoOpenAddModal = false,
+  onResetAutoOpenAddModal,
+  autoOpenPdfModal = false,
+  onResetAutoOpenPdfModal,
+  onNavigateToTab,
 }: JournalSheetProps) {
   // Navigation / Filter states
   const [searchTerm, setSearchTerm] = useState('');
   const [debitFilter, setDebitFilter] = useState('');
   const [creditFilter, setCreditFilter] = useState('');
   const [activePresetTab, setActivePresetTab] = useState<'standard' | 'ai'>('standard');
+
+  // Transfer modal state
+  const [isTransferModalOpen, setIsTransferModalOpen] = useState(false);
+  const [transferFrom, setTransferFrom] = useState<'cash_to_bank' | 'bank_to_cash'>('cash_to_bank');
+  const [transferAmount, setTransferAmount] = useState('');
+  const [transferDate, setTransferDate] = useState(new Date().toISOString().split('T')[0]);
+  const [transferNarration, setTransferNarration] = useState('Contra cash transfer between accounts');
+  const [isTransferSubmitting, setIsTransferSubmitting] = useState(false);
+
+  const handleExecuteTransfer = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const amt = parseFloat(transferAmount);
+    if (isNaN(amt) || amt <= 0) return;
+
+    const debitAcc = transferFrom === 'cash_to_bank' ? '2' : '1';
+    const creditAcc = transferFrom === 'cash_to_bank' ? '1' : '2';
+
+    setIsTransferSubmitting(true);
+    try {
+      await onAddEntry({
+        date: transferDate,
+        debitAccount: debitAcc,
+        creditAccount: creditAcc,
+        amount: amt,
+        narration: transferNarration || (transferFrom === 'cash_to_bank' ? 'Deposited Cash into Bank' : 'Withdrew Cash from Bank'),
+      });
+      setIsTransferModalOpen(false);
+      setTransferAmount('');
+    } catch (err) {
+      console.error('Transfer failed', err);
+    } finally {
+      setIsTransferSubmitting(false);
+    }
+  };
 
   // Form states for Add/Edit
   const [isFormOpen, setIsFormOpen] = useState(false);
@@ -129,6 +178,11 @@ export function JournalSheet({
   const [isPdfModalOpen, setIsPdfModalOpen] = useState(false);
   const [selectedPdfView, setSelectedPdfView] = useState<'all' | 'combined' | 'journal' | 'trial' | 'receipts' | 'expenditure' | 'balance'>('combined');
   const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
+
+  // Date Range Filtering state
+  const [startDate, setStartDate] = useState('');
+  const [endDate, setEndDate] = useState('');
+  const [activePreset, setActivePreset] = useState<DatePreset>('all');
 
   const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
   const [debitAccount, setDebitAccount] = useState('');
@@ -149,6 +203,23 @@ export function JournalSheet({
       handleQuickTemplate(quickTemplateToApply.template);
     }
   }, [quickTemplateToApply]);
+
+  // Add listener for autoOpenAddModal
+  React.useEffect(() => {
+    if (autoOpenAddModal) {
+      setEditingEntry(null);
+      setIsFormOpen(true);
+      onResetAutoOpenAddModal?.();
+    }
+  }, [autoOpenAddModal, onResetAutoOpenAddModal]);
+
+  // Add listener for autoOpenPdfModal
+  React.useEffect(() => {
+    if (autoOpenPdfModal) {
+      setIsPdfModalOpen(true);
+      onResetAutoOpenPdfModal?.();
+    }
+  }, [autoOpenPdfModal, onResetAutoOpenPdfModal]);
 
   // Sorting
   const [sortKey, setSortKey] = useState<'date' | 'amount'>('date');
@@ -473,8 +544,13 @@ export function JournalSheet({
     downloadAnchor.remove();
   };
 
+  // Filter entries based on active date range
+  const dateFilteredEntries = useMemo(() => {
+    return filterEntriesByDateRange(entries, startDate, endDate);
+  }, [entries, startDate, endDate]);
+
   // Filter entries
-  const filteredEntries = entries.filter((entry) => {
+  const filteredEntries = dateFilteredEntries.filter((entry) => {
     const drName = resolveAccountName(entry.debitAccount, accounts);
     const crName = resolveAccountName(entry.creditAccount, accounts);
     const matchSearch =
@@ -498,6 +574,38 @@ export function JournalSheet({
       return sortOrder === 'asc' ? cmp : -cmp;
     }
   });
+
+  const totalFilteredAmount = useMemo(() => {
+    return sortedEntries.reduce((sum, e) => sum + e.amount, 0);
+  }, [sortedEntries]);
+
+  const journalFilename = generateStatementFilename('Journal_Statement', startDate, endDate, sheetName);
+
+  const handleExportJournalPdf = async () => {
+    try {
+      setIsGeneratingPdf(true);
+      await exportElementToPdf({
+        elementId: 'journal-printable-sheet',
+        filename: journalFilename,
+        defaultOrientation: 'portrait',
+        columnCount: 6,
+      });
+    } catch (err) {
+      console.error('Failed to export Journal PDF:', err);
+    } finally {
+      setIsGeneratingPdf(false);
+    }
+  };
+
+  const handlePrintJournal = () => {
+    triggerNativePrint(journalFilename);
+  };
+
+  const handleFilterChange = (start: string, end: string, preset: DatePreset) => {
+    setStartDate(start);
+    setEndDate(end);
+    setActivePreset(preset);
+  };
 
   const toggleSort = (key: 'date' | 'amount') => {
     if (sortKey === key) {
@@ -556,10 +664,75 @@ export function JournalSheet({
         </div>
       )}
 
-      {/* Sheet Sheet Grid UI */}
-      <div className="bg-white border border-gray-200 rounded-xl shadow-xs overflow-hidden">
-        {/* Controls Toolbar */}
-        <div className="p-4 border-b border-gray-100 flex flex-col md:flex-row gap-4 items-center justify-between">
+      {/* Date Range Selector & Universal Export Toolbar (Hidden on print) */}
+      <DateRangeFilter
+        startDate={startDate}
+        endDate={endDate}
+        activePreset={activePreset}
+        onFilterChange={handleFilterChange}
+        onPrint={handlePrintJournal}
+        onExportPdf={handleExportJournalPdf}
+        isGeneratingPdf={isGeneratingPdf}
+        totalRecords={entries.length}
+        filteredRecords={sortedEntries.length}
+        statementTitle="General Journal Book"
+      />
+
+      {/* Sheet Sheet Grid UI & Printable Document */}
+      <div id="journal-printable-sheet" className="statement-sheet bg-white border border-gray-200 rounded-xl shadow-xs overflow-hidden">
+        {/* Dynamic Statement Paper Header */}
+        <div className="p-4 sm:p-6 pb-0">
+          <StatementPaperHeader
+            sheetName={sheetName}
+            statementTitle="General Journal Statement"
+            subtitle={sheetTagline || "Sequential Chronological Double-Entry Journal Postings"}
+            startDate={startDate}
+            endDate={endDate}
+            academicYear={academicYear}
+          />
+
+          {/* Quick Statement Posture Summary Cards */}
+          <div className="summary-cards grid grid-cols-1 sm:grid-cols-3 gap-3 mb-4">
+            <div className="card bg-indigo-50/60 border border-indigo-150 rounded-lg p-3">
+              <div className="title text-[10.5px] uppercase font-bold text-indigo-700 tracking-wider font-mono">
+                Transactions Count
+              </div>
+              <div className="value text-lg font-black text-slate-900 mt-1 font-mono">
+                {sortedEntries.length} {sortedEntries.length === 1 ? 'Entry' : 'Entries'}
+              </div>
+              <div className="text-[10px] text-slate-500 mt-0.5">
+                {startDate || endDate ? 'Filtered period total' : 'All recorded transactions'}
+              </div>
+            </div>
+
+            <div className="card bg-emerald-50/60 border border-emerald-150 rounded-lg p-3">
+              <div className="title text-[10.5px] uppercase font-bold text-emerald-700 tracking-wider font-mono">
+                Total Transaction Volume
+              </div>
+              <div className="value text-lg font-black text-emerald-950 mt-1 font-mono">
+                ₹{totalFilteredAmount.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+              </div>
+              <div className="text-[10px] text-emerald-700/80 mt-0.5">
+                Debit = Credit equilibrium
+              </div>
+            </div>
+
+            <div className="card bg-blue-50/60 border border-blue-150 rounded-lg p-3">
+              <div className="title text-[10.5px] uppercase font-bold text-blue-700 tracking-wider font-mono">
+                Active Date Scope
+              </div>
+              <div className="value text-sm font-bold text-slate-900 mt-1 font-mono truncate" title={getPeriodDescription(startDate, endDate)}>
+                {getPeriodDescription(startDate, endDate)}
+              </div>
+              <div className="text-[10px] text-slate-500 mt-0.5">
+                FY {academicYear}
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Controls Toolbar (Hidden on print) */}
+        <div className="no-print p-4 border-b border-gray-100 flex flex-col md:flex-row gap-4 items-center justify-between">
           {/* Left search filters */}
           <div className="flex flex-wrap gap-2 w-full md:w-auto">
             <div className="relative flex-1 sm:flex-initial">
@@ -601,40 +774,73 @@ export function JournalSheet({
           </div>
 
           {/* Right Toolbar Options */}
-          <div className="flex flex-col sm:flex-row justify-between items-center gap-2 w-full md:w-auto md:flex-1">
-            <div className="flex gap-2 w-full sm:w-auto justify-start">
+          <div className="flex flex-col xl:flex-row justify-between items-center gap-2 w-full md:w-auto md:flex-1">
+            {/* 4 Primary Action Buttons: Record Entry, Transfer, View Reports, Manage Dues */}
+            <div className="flex flex-wrap sm:flex-nowrap gap-2 w-full sm:w-auto justify-start">
               <button
                 onClick={handleOpenAdd}
                 disabled={!isEditor}
                 title={isEditor ? "Record a new journal transaction row" : "Transaction addition restricted to authorized union editors only."}
-                className="flex-1 sm:flex-initial inline-flex items-center justify-center gap-1.5 px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-slate-350 disabled:text-slate-500 disabled:opacity-50 text-white rounded-lg text-sm font-medium shadow-xs transition-all disabled:cursor-not-allowed"
+                className="flex-1 sm:flex-initial inline-flex items-center justify-center gap-1.5 px-3.5 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-slate-350 disabled:text-slate-500 disabled:opacity-50 text-white rounded-lg text-sm font-semibold shadow-xs transition-all disabled:cursor-not-allowed cursor-pointer"
               >
                 <PlusCircle size={16} />
                 <span>Record Entry</span>
               </button>
 
               <button
-                onClick={() => setIsPdfModalOpen(true)}
-                title="Review audited financial statements and save formatted PDF reports"
-                className="flex-1 sm:flex-initial inline-flex items-center justify-center gap-1.5 px-3 py-2 bg-rose-600 hover:bg-rose-700 text-white border border-rose-700 rounded-lg text-sm font-semibold transition-all cursor-pointer shadow-xs"
+                onClick={() => setIsTransferModalOpen(true)}
+                disabled={!isEditor}
+                title="Quick transfer between Cash and Bank"
+                className="flex-1 sm:flex-initial inline-flex items-center justify-center gap-1.5 px-3.5 py-2 bg-purple-50 hover:bg-purple-100 text-purple-700 border border-purple-200 rounded-lg text-sm font-semibold transition-all cursor-pointer shadow-3xs"
               >
-                <FileText size={16} />
-                <span>Review & Save PDF</span>
+                <ArrowLeftRight size={15} className="text-purple-600" />
+                <span>Transfer</span>
+              </button>
+
+              <button
+                onClick={() => onNavigateToTab ? onNavigateToTab('expenditure') : setIsPdfModalOpen(true)}
+                title="View Income & Expenditure Reports"
+                className="flex-1 sm:flex-initial inline-flex items-center justify-center gap-1.5 px-3.5 py-2 bg-sky-50 hover:bg-sky-100 text-sky-800 border border-sky-200 rounded-lg text-sm font-semibold transition-all cursor-pointer shadow-3xs"
+              >
+                <FileText size={15} className="text-sky-600" />
+                <span>View Reports</span>
+              </button>
+
+              <button
+                onClick={() => onNavigateToTab ? onNavigateToTab('dues') : null}
+                title="Manage Student Dues & Members"
+                className="flex-1 sm:flex-initial inline-flex items-center justify-center gap-1.5 px-3.5 py-2 bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-200 rounded-lg text-sm font-semibold transition-all cursor-pointer shadow-3xs"
+              >
+                <Users size={15} className="text-amber-600" />
+                <span>Manage Dues</span>
               </button>
             </div>
 
-            <div className="flex gap-2 w-full sm:w-auto justify-end">
+            {/* Ledger File & Audit Utilities */}
+            <div className="flex gap-1.5 w-full sm:w-auto justify-end items-center">
+              <button
+                onClick={() => setIsPdfModalOpen(true)}
+                title="Review audited financial statements and save formatted PDF reports"
+                className="flex-1 sm:flex-initial inline-flex items-center justify-center gap-1.5 px-3 py-2 bg-white hover:bg-rose-50 text-rose-700 border border-gray-200 hover:border-rose-200 rounded-lg text-xs font-semibold transition-all cursor-pointer shadow-3xs"
+              >
+                <FileText size={14} className="text-rose-600" />
+                <span>Review & Save PDF</span>
+              </button>
+
               <button
                 onClick={handleExportBackup}
                 title="Backup JSON file"
-                className="flex-1 sm:flex-initial inline-flex items-center justify-center gap-1.5 px-3 py-2 bg-white hover:bg-gray-50 text-gray-700 border border-gray-200 rounded-lg text-sm font-medium transition-all cursor-pointer"
+                className="flex-1 sm:flex-initial inline-flex items-center justify-center gap-1.5 px-3 py-2 bg-white hover:bg-blue-50 text-slate-700 border border-gray-200 hover:border-blue-200 rounded-lg text-xs font-semibold transition-all cursor-pointer shadow-3xs"
               >
-                <Download size={16} className="text-blue-500" />
+                <Download size={14} className="text-blue-500" />
                 <span>Backup Ledger</span>
               </button>
 
-              <label className="flex-1 sm:flex-initial inline-flex items-center justify-center gap-1.5 px-3 py-2 bg-white hover:bg-gray-50 text-gray-700 border border-gray-200 rounded-lg text-sm font-medium transition-all cursor-pointer">
-                <Upload size={16} className="text-indigo-500" />
+              <label 
+                title="Import Backup JSON file"
+                className="flex-1 sm:flex-initial inline-flex items-center justify-center gap-1.5 px-3 py-2 bg-white hover:bg-indigo-50 text-slate-700 border border-gray-200 hover:border-indigo-200 rounded-lg text-xs font-semibold transition-all cursor-pointer shadow-3xs"
+              >
+                <Upload size={14} className="text-indigo-500" />
                 <span>Import Backup</span>
                 <input type="file" accept=".json" onChange={handleFileImport} className="hidden" />
               </label>
@@ -644,8 +850,8 @@ export function JournalSheet({
 
         {/* The Spreadsheet Table Layout */}
         <div className="overflow-x-auto">
-          {/* Header row to look like Excel / Google Sheet */}
-          <div className="bg-gray-100 border-b border-gray-200 text-center flex items-center font-mono text-[10px] text-gray-400 select-none">
+          {/* Header row to look like Excel / Google Sheet in screen view */}
+          <div className="no-print bg-gray-100 border-b border-gray-200 text-center flex items-center font-mono text-[10px] text-gray-400 select-none">
             <div className="w-12 border-r border-gray-300 py-1 font-semibold bg-gray-200 text-gray-600">Row</div>
             <div className="flex-1 min-w-[120px] text-left px-4 border-r border-gray-200">Col A (Date)</div>
             <div className="flex-1 min-w-[180px] text-left px-4 border-r border-gray-200">Col B (Debit Dr Account)</div>
@@ -658,20 +864,31 @@ export function JournalSheet({
           {sortedEntries.length === 0 ? (
             <div className="p-12 text-center text-gray-500">
               <Info className="mx-auto mb-2 text-gray-400" size={32} />
-              <p className="font-semibold text-gray-700">No transactions recorded in the Journal Sheet yet.</p>
+              <p className="font-semibold text-gray-700">No transactions recorded in the Journal Sheet for this date range.</p>
               <p className="text-xs text-gray-400 mt-1 max-w-md mx-auto">
-                Use the "Record Entry" button or select a "Treasurer Quick Template" above to populate the ledger.
+                Use the "Record Entry" button or select "All Time" in the date filter above to view all transactions.
               </p>
             </div>
           ) : (
             <table className="w-full text-left border-collapse font-serif text-sm">
+              <thead className="bg-slate-100 text-slate-800 font-bold border-b border-slate-300 font-mono text-center text-[10px] sm:text-xs uppercase">
+                <tr>
+                  <th className="py-2 px-2.5 border-r border-slate-300 text-center w-12 bg-slate-200/80">#</th>
+                  <th className="py-2 px-3 border-r border-slate-300 text-left w-24">Date</th>
+                  <th className="py-2 px-3 border-r border-slate-300 text-left">Debit Dr Account</th>
+                  <th className="py-2 px-3 border-r border-slate-300 text-left">Credit Cr Account</th>
+                  <th className="py-2 px-3 border-r border-slate-300 text-right w-36">Amount (₹)</th>
+                  <th className="py-2 px-3 border-r border-slate-300 text-left">Narration / Particulars</th>
+                  <th className="py-2 px-3 text-center w-24 no-print">Actions</th>
+                </tr>
+              </thead>
               <tbody className="font-sans divide-y divide-gray-100">
                 {sortedEntries.map((entry, index) => {
                   const drAccName = resolveAccountName(entry.debitAccount, accounts);
                   const crAccName = resolveAccountName(entry.creditAccount, accounts);
 
                   return (
-                    <tr key={entry.id} className="hover:bg-blue-50/50 transition-colors group">
+                    <tr key={entry.id} className="hover:bg-blue-50/50 transition-colors group break-inside-avoid" data-break-avoid="true">
                       {/* Grid Row Marker */}
                       <td className="w-12 text-center bg-gray-50 font-mono text-xs text-gray-400 border-r border-gray-150 py-3 font-semibold">
                         {index + 1}
@@ -760,7 +977,7 @@ export function JournalSheet({
                       </td>
 
                       {/* Operations */}
-                      <td className="p-3 text-center w-24">
+                      <td className="p-3 text-center w-24 no-print">
                         {isEditor ? (
                           <div className="flex items-center justify-center gap-2">
                             <button
@@ -788,12 +1005,26 @@ export function JournalSheet({
                   );
                 })}
               </tbody>
+              <tfoot className="bg-slate-50 border-t-2 border-slate-300 font-bold font-mono text-xs">
+                <tr>
+                  <td colSpan={4} className="p-3 text-right text-slate-700">
+                    Total Filtered Journal Volume:
+                  </td>
+                  <td className="p-3 text-right text-blue-950 font-black whitespace-nowrap">
+                    ₹{totalFilteredAmount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  </td>
+                  <td className="p-3 text-slate-500 font-normal italic text-[11px]">
+                    {sortedEntries.length} transaction entries verified
+                  </td>
+                  <td className="p-3 no-print"></td>
+                </tr>
+              </tfoot>
             </table>
           )}
         </div>
 
         {/* Footer info stats */}
-        <div className="p-3 bg-gray-50 border-t border-gray-100 flex items-center justify-between text-xs text-gray-400 font-mono">
+        <div className="no-print p-3 bg-gray-50 border-t border-gray-100 flex items-center justify-between text-xs text-gray-400 font-mono">
           <div>
             Showing <span className="font-bold text-gray-600">{sortedEntries.length}</span> of <span className="font-bold text-gray-600">{entries.length}</span> recorded rows
           </div>
@@ -805,6 +1036,15 @@ export function JournalSheet({
               Sort Amount {sortKey === 'amount' && (sortOrder === 'asc' ? '▲' : '▼')}
             </button>
           </div>
+        </div>
+
+        {/* Verification and Certification Block */}
+        <div className="p-4 sm:p-6 pt-2">
+          <VerificationBlock
+            treasurerName={treasurerName}
+            treasurerEmail={treasurerEmail}
+            academicYear={academicYear}
+          />
         </div>
       </div>
 
@@ -912,9 +1152,7 @@ export function JournalSheet({
                                 if (onAddAccount) {
                                   return await onAddAccount({
                                     name,
-                                    type,
-                                    category: type === 'Expense' ? 'Expenses' : type === 'Asset' ? 'Liquid Assets' : 'General',
-                                    description: `Auto-created during entry posting`
+                                    type
                                   });
                                 }
                                 return undefined;
@@ -996,9 +1234,7 @@ export function JournalSheet({
                                 if (onAddAccount) {
                                   return await onAddAccount({
                                     name,
-                                    type,
-                                    category: type === 'Income' ? 'Revenue' : type === 'Liability' ? 'Payables' : 'General',
-                                    description: `Auto-created during entry posting`
+                                    type
                                   });
                                 }
                                 return undefined;
@@ -1129,9 +1365,7 @@ export function JournalSheet({
                         if (onAddAccount) {
                           return await onAddAccount({
                             name,
-                            type,
-                            category: type === 'Expense' ? 'Expenses' : type === 'Asset' ? 'Liquid Assets' : 'General',
-                            description: `Auto-created during entry posting`
+                            type
                           });
                         }
                         return undefined;
@@ -1180,9 +1414,7 @@ export function JournalSheet({
                         if (onAddAccount) {
                           return await onAddAccount({
                             name,
-                            type,
-                            category: type === 'Income' ? 'Revenue' : type === 'Liability' ? 'Payables' : 'General',
-                            description: `Auto-created during entry posting`
+                            type
                           });
                         }
                         return undefined;
@@ -2582,6 +2814,124 @@ export function JournalSheet({
           </div>
         );
       })()}
+
+      {/* 💳 QUICK CONTRA TRANSFER MODAL */}
+      {isTransferModalOpen && (
+        <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in duration-200">
+          <div className="bg-white rounded-3xl max-w-md w-full shadow-2xl border border-gray-200 overflow-hidden animate-in zoom-in-95 duration-200">
+            <div className="p-5 border-b border-gray-100 flex items-center justify-between bg-gradient-to-r from-purple-50 to-indigo-50/50">
+              <div className="flex items-center gap-2.5">
+                <div className="w-10 h-10 rounded-xl bg-[#EDE7F6] text-[#7C3AED] flex items-center justify-center shadow-3xs">
+                  <ArrowLeftRight size={20} />
+                </div>
+                <div>
+                  <h3 className="font-bold text-slate-900 text-base">Quick Transfer</h3>
+                  <p className="text-xs text-slate-500">Move funds between Cash and Bank</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setIsTransferModalOpen(false)}
+                className="w-8 h-8 rounded-full bg-white/80 hover:bg-white text-slate-500 hover:text-slate-800 flex items-center justify-center cursor-pointer transition-colors"
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            <form onSubmit={handleExecuteTransfer} className="p-5 space-y-4">
+              {/* Transfer Direction Toggle */}
+              <div>
+                <label className="text-xs font-bold text-slate-700 block mb-1.5">Transfer Route</label>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setTransferFrom('cash_to_bank')}
+                    className={`py-2.5 px-3 rounded-xl border text-xs font-bold flex flex-col items-center gap-1 transition-all cursor-pointer ${
+                      transferFrom === 'cash_to_bank'
+                        ? 'border-indigo-600 bg-indigo-50 text-indigo-900 shadow-2xs'
+                        : 'border-gray-200 bg-white text-slate-600 hover:bg-slate-50'
+                    }`}
+                  >
+                    <span>Cash → Bank</span>
+                    <span className="text-[10px] font-normal opacity-75">Deposit cash in bank</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setTransferFrom('bank_to_cash')}
+                    className={`py-2.5 px-3 rounded-xl border text-xs font-bold flex flex-col items-center gap-1 transition-all cursor-pointer ${
+                      transferFrom === 'bank_to_cash'
+                        ? 'border-indigo-600 bg-indigo-50 text-indigo-900 shadow-2xs'
+                        : 'border-gray-200 bg-white text-slate-600 hover:bg-slate-50'
+                    }`}
+                  >
+                    <span>Bank → Cash</span>
+                    <span className="text-[10px] font-normal opacity-75">Withdraw cash from bank</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Amount */}
+              <div>
+                <label className="text-xs font-bold text-slate-700 block mb-1">Transfer Amount (₹)</label>
+                <div className="relative">
+                  <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 font-bold text-sm">₹</span>
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="1"
+                    required
+                    placeholder="0.00"
+                    value={transferAmount}
+                    onChange={(e) => setTransferAmount(e.target.value)}
+                    className="w-full pl-8 pr-4 py-2.5 border border-gray-200 rounded-xl text-sm font-bold font-mono text-slate-900 focus:outline-none focus:ring-2 focus:ring-purple-500/20 focus:border-purple-500"
+                  />
+                </div>
+              </div>
+
+              {/* Date */}
+              <div>
+                <label className="text-xs font-bold text-slate-700 block mb-1">Date</label>
+                <input
+                  type="date"
+                  required
+                  value={transferDate}
+                  onChange={(e) => setTransferDate(e.target.value)}
+                  className="w-full px-3.5 py-2.5 border border-gray-200 rounded-xl text-xs font-mono text-slate-800 focus:outline-none focus:ring-2 focus:ring-purple-500/20 focus:border-purple-500"
+                />
+              </div>
+
+              {/* Narration */}
+              <div>
+                <label className="text-xs font-bold text-slate-700 block mb-1">Narration / Note</label>
+                <input
+                  type="text"
+                  value={transferNarration}
+                  onChange={(e) => setTransferNarration(e.target.value)}
+                  placeholder="e.g. Union fund contra transfer"
+                  className="w-full px-3.5 py-2.5 border border-gray-200 rounded-xl text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-purple-500/20 focus:border-purple-500"
+                />
+              </div>
+
+              <div className="pt-2 flex items-center justify-end gap-2.5">
+                <button
+                  type="button"
+                  onClick={() => setIsTransferModalOpen(false)}
+                  className="px-4 py-2 text-xs font-semibold text-slate-600 hover:text-slate-800 cursor-pointer rounded-xl hover:bg-slate-100 transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={isTransferSubmitting}
+                  className="px-5 py-2 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white rounded-xl text-xs font-bold transition-all shadow-xs cursor-pointer disabled:opacity-50"
+                >
+                  {isTransferSubmitting ? 'Recording...' : 'Record Transfer'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

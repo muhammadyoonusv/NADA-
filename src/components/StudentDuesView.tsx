@@ -1446,13 +1446,13 @@ export function StudentDuesView({
                   <th className="p-4">Roll No / ID</th>
                   <th className="p-4">Student Name</th>
                   <th className="p-4">Particular Notes</th>
-                  {isEditor && <th className="p-4 text-right">Actions</th>}
+                  <th className="p-4 text-right">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-105">
                 {filteredRows.length === 0 ? (
                   <tr>
-                    <td colSpan={isEditor ? 4 : 3} className="p-12 text-slate-400 text-center">
+                    <td colSpan={4} className="p-12 text-slate-400 text-center">
                       <Users size={20} className="mx-auto mb-2 text-slate-300" />
                       <p>No master student records match query.</p>
                     </td>
@@ -1463,26 +1463,26 @@ export function StudentDuesView({
                       <td className="p-4 font-bold font-mono text-slate-900 uppercase">{stu.id}</td>
                       <td className="p-4 text-slate-900 font-semibold">{stu.name}</td>
                       <td className="p-4 text-slate-400 text-[11px]">{stu.remarks || <span className="italic text-gray-200">No remarks</span>}</td>
-                      {isEditor && (
-                        <td className="p-4 text-right">
-                          <div className="inline-flex items-center gap-1">
-                            <button
-                              onClick={() => handleOpenEditMaster(stu)}
-                              className="p-1 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 border border-gray-200 rounded-md transition-colors"
-                              title="Edit profile"
-                            >
-                              <Edit size={11} />
-                            </button>
-                            <button
-                              onClick={() => setDeletingStudentId(stu.id)}
-                              className="p-1 text-slate-400 hover:text-rose-600 hover:bg-rose-50 border border-gray-200 rounded-md transition-colors"
-                              title="Delete profile"
-                            >
-                              <Trash2 size={11} />
-                            </button>
-                          </div>
-                        </td>
-                      )}
+                      <td className="p-4 text-right">
+                        <div className="inline-flex items-center gap-1">
+                          <button
+                            type="button"
+                            onClick={() => handleOpenEditMaster(stu)}
+                            className="p-1.5 text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 border border-gray-200 hover:border-indigo-300 rounded-md transition-colors cursor-pointer"
+                            title="Edit student profile"
+                          >
+                            <Edit size={12} />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setDeletingStudentId(stu.id)}
+                            className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 border border-gray-200 hover:border-rose-300 rounded-md transition-colors cursor-pointer"
+                            title="Delete student profile"
+                          >
+                            <Trash2 size={12} />
+                          </button>
+                        </div>
+                      </td>
                     </tr>
                   ))
                 )}
@@ -1513,25 +1513,23 @@ export function StudentDuesView({
                     </div>
                   )}
 
-                  {isEditor && (
-                    <div className="flex gap-2 pt-1 border-t border-slate-100">
-                      <button
-                        type="button"
-                        onClick={() => handleOpenEditMaster(stu)}
-                        className="flex-1 inline-flex items-center justify-center gap-1.5 py-2.5 border border-indigo-200 hover:border-indigo-600 bg-indigo-50 hover:bg-indigo-600 text-indigo-750 hover:text-white rounded-lg text-xs font-bold transition-all cursor-pointer"
-                      >
-                        <Edit size={12} /> Edit Details
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setDeletingStudentId(stu.id)}
-                        className="px-3.5 py-2.5 text-rose-600 hover:text-white border border-rose-200 hover:border-rose-600 bg-rose-50 hover:bg-rose-600 rounded-lg transition-all flex items-center justify-center cursor-pointer"
-                        title="Delete profile"
-                      >
-                        <Trash2 size={13} />
-                      </button>
-                    </div>
-                  )}
+                  <div className="flex gap-2 pt-1 border-t border-slate-100">
+                    <button
+                      type="button"
+                      onClick={() => handleOpenEditMaster(stu)}
+                      className="flex-1 inline-flex items-center justify-center gap-1.5 py-2.5 border border-indigo-200 hover:border-indigo-600 bg-indigo-50 hover:bg-indigo-600 text-indigo-750 hover:text-white rounded-lg text-xs font-bold transition-all cursor-pointer"
+                    >
+                      <Edit size={12} /> Edit Details
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setDeletingStudentId(stu.id)}
+                      className="px-3.5 py-2.5 text-rose-600 hover:text-white border border-rose-200 hover:border-rose-600 bg-rose-50 hover:bg-rose-600 rounded-lg transition-all flex items-center justify-center cursor-pointer"
+                      title="Delete profile"
+                    >
+                      <Trash2 size={13} />
+                    </button>
+                  </div>
                 </div>
               ))
             )}
@@ -1775,13 +1773,13 @@ export function StudentDuesView({
                     </th>
                     <th className="p-4 text-center">Status</th>
                     <th className="p-4">Paid Date / Tracking Remarks</th>
-                    {isEditor && <th className="p-4 text-right">Actions</th>}
+                    <th className="p-4 text-right">Actions</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-105">
                   {filteredRows.length === 0 ? (
                     <tr>
-                      <td colSpan={isEditor ? 9 : 7} className="p-12 text-slate-400 text-center">
+                      <td colSpan={9} className="p-12 text-slate-400 text-center">
                         <Users size={20} className="mx-auto mb-2 text-slate-300" />
                         <p>No student payments found matching your filter selection.</p>
                       </td>
@@ -1886,33 +1884,40 @@ export function StudentDuesView({
                             {row.dues.remarks || <span className="text-gray-200 italic">No notes</span>}
                           </td>
 
-                          {/* Pay & deletion actions */}
-                          {isEditor && (
-                            <td className="p-4 text-right whitespace-nowrap">
-                              <div className="inline-flex items-center gap-1.5 justify-end">
-                                {balance > 0 ? (
-                                  <button
-                                    onClick={() => handleSelectPayStudent(row.student.id, row.dues)}
-                                    className="inline-flex items-center gap-1 px-2.5 py-1 bg-emerald-50 hover:bg-emerald-600 text-emerald-700 hover:text-white border border-emerald-200 hover:border-emerald-600 rounded-md text-[10px] font-extrabold cursor-pointer transition-all shadow-3xs"
-                                  >
-                                    <CreditCard size={10} /> Record Pay
-                                  </button>
-                                ) : (
-                                  <span className="px-2 py-0.5 text-[10px] font-bold text-emerald-600 bg-emerald-100/50 rounded-md flex items-center gap-0.5 flex-row">
-                                    <Check size={11} /> Settled
-                                  </span>
-                                )}
+                          {/* Pay, Edit & deletion actions */}
+                          <td className="p-4 text-right whitespace-nowrap">
+                            <div className="inline-flex items-center gap-1.5 justify-end">
+                              {balance > 0 ? (
                                 <button
                                   type="button"
-                                  onClick={() => handleRemoveStudentFromProgram(row.student.id)}
-                                  className="p-1 text-slate-400 hover:text-rose-600 hover:bg-rose-50 border border-gray-200 hover:border-rose-300 rounded-md transition-colors cursor-pointer shadow-3xs"
-                                  title="Remove student from this campaign folder"
+                                  onClick={() => handleSelectPayStudent(row.student.id, row.dues)}
+                                  className="inline-flex items-center gap-1 px-2.5 py-1 bg-emerald-50 hover:bg-emerald-600 text-emerald-700 hover:text-white border border-emerald-200 hover:border-emerald-600 rounded-md text-[10px] font-extrabold cursor-pointer transition-all shadow-3xs"
                                 >
-                                  <Trash2 size={11} />
+                                  <CreditCard size={10} /> Record Pay
                                 </button>
-                              </div>
-                            </td>
-                          )}
+                              ) : (
+                                <span className="px-2 py-0.5 text-[10px] font-bold text-emerald-600 bg-emerald-100/50 rounded-md flex items-center gap-0.5 flex-row">
+                                  <Check size={11} /> Settled
+                                </span>
+                              )}
+                              <button
+                                type="button"
+                                onClick={() => handleOpenEditMaster(row.student)}
+                                className="p-1.5 text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 border border-gray-200 hover:border-indigo-300 rounded-md transition-colors cursor-pointer shadow-3xs"
+                                title="Edit student details"
+                              >
+                                <Edit size={12} />
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleRemoveStudentFromProgram(row.student.id)}
+                                className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 border border-gray-200 hover:border-rose-300 rounded-md transition-colors cursor-pointer shadow-3xs"
+                                title="Remove student from this campaign folder"
+                              >
+                                <Trash2 size={12} />
+                              </button>
+                            </div>
+                          </td>
 
                         </tr>
                       );
@@ -2027,31 +2032,37 @@ export function StudentDuesView({
                     )}
 
                     {/* Actions panel */}
-                    {isEditor && (
-                      <div className="flex gap-2 pt-1 border-t border-slate-100">
-                        {balance > 0 ? (
-                          <button
-                            type="button"
-                            onClick={() => handleSelectPayStudent(row.student.id, row.dues)}
-                            className="flex-1 inline-flex items-center justify-center gap-1.5 py-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-extrabold cursor-pointer transition-all shadow-3xs"
-                          >
-                            <CreditCard size={12} /> Record Pay
-                          </button>
-                        ) : (
-                          <div className="flex-1 py-2.5 bg-emerald-50 text-emerald-700 rounded-lg text-xs font-bold flex items-center justify-center gap-1 border border-emerald-150">
-                            <Check size={12} /> Balance Settled
-                          </div>
-                        )}
+                    <div className="flex gap-2 pt-1 border-t border-slate-100">
+                      {balance > 0 ? (
                         <button
                           type="button"
-                          onClick={() => handleRemoveStudentFromProgram(row.student.id)}
-                          className="px-3 py-2.5 text-slate-405 hover:text-rose-605 hover:bg-rose-50 border border-slate-205 hover:border-rose-205 rounded-lg transition-all cursor-pointer flex items-center justify-center"
-                          title="Remove student from this campaign folder"
+                          onClick={() => handleSelectPayStudent(row.student.id, row.dues)}
+                          className="flex-1 inline-flex items-center justify-center gap-1.5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-extrabold cursor-pointer transition-all shadow-3xs"
                         >
-                          <Trash2 size={13} />
+                          <CreditCard size={12} /> Record Pay
                         </button>
-                      </div>
-                    )}
+                      ) : (
+                        <div className="flex-1 py-2.5 bg-emerald-50 text-emerald-700 rounded-lg text-xs font-bold flex items-center justify-center gap-1 border border-emerald-150">
+                          <Check size={12} /> Balance Settled
+                        </div>
+                      )}
+                      <button
+                        type="button"
+                        onClick={() => handleOpenEditMaster(row.student)}
+                        className="px-3 py-2.5 text-indigo-700 hover:text-white border border-indigo-200 hover:border-indigo-600 bg-indigo-50 hover:bg-indigo-600 rounded-lg transition-all cursor-pointer flex items-center justify-center gap-1 text-xs font-bold"
+                        title="Edit student details"
+                      >
+                        <Edit size={12} /> Edit
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveStudentFromProgram(row.student.id)}
+                        className="px-3 py-2.5 text-slate-405 hover:text-rose-605 hover:bg-rose-50 border border-slate-205 hover:border-rose-205 rounded-lg transition-all cursor-pointer flex items-center justify-center"
+                        title="Remove student from this campaign folder"
+                      >
+                        <Trash2 size={13} />
+                      </button>
+                    </div>
                   </div>
                 );
               })

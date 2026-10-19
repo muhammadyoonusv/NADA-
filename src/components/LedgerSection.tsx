@@ -3,12 +3,17 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { jsPDF } from 'jspdf';
 import html2canvas from 'html2canvas-pro';
 import { Account, JournalEntry } from '../types';
 import { getLedgerForAccount, getAccountBalances } from '../utils/accounting';
 import { Download, BookOpen, Calendar, CreditCard, Coins, Landmark, ArrowRight, TrendingUp, TrendingDown, BookCheck, Printer, X } from 'lucide-react';
+import { DateRangeFilter } from './DateRangeFilter';
+import { StatementPaperHeader } from './StatementPaperHeader';
+import { VerificationBlock } from './VerificationBlock';
+import { DatePreset, filterEntriesByDateRange, generateStatementFilename } from '../utils/dateFilter';
+import { exportElementToPdf, triggerNativePrint } from '../utils/printExport';
 
 interface LedgerSectionProps {
   accounts: Account[];
@@ -27,16 +32,32 @@ export function LedgerSection({
   sheetTagline = "Continuous double-entry ledger postings mapped automatically from transactions",
   treasurerName = "Authorized Treasurer",
   treasurerEmail = "",
-  academicYear = "2026"
+  academicYear = "2026 - 2027"
 }: LedgerSectionProps) {
   const [activeSubTab, setActiveSubTab] = useState<'lobby' | 'all'>('lobby');
   const [selectedAccountId, setSelectedAccountId] = useState(accounts[0]?.id || '1');
   const [printAccount, setPrintAccount] = useState<Account | null>(null);
   const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
 
+  // Date Range Filtering state
+  const [startDate, setStartDate] = useState('');
+  const [endDate, setEndDate] = useState('');
+  const [activePreset, setActivePreset] = useState<DatePreset>('all');
+
+  // Filter entries based on active date range
+  const filteredEntries = useMemo(() => {
+    return filterEntriesByDateRange(entries, startDate, endDate);
+  }, [entries, startDate, endDate]);
+
   const selectedAccount = accounts.find((a) => a.id === selectedAccountId) || accounts[0];
-  const ledgerRows = getLedgerForAccount(selectedAccountId, accounts, entries);
-  const accountBalances = getAccountBalances(accounts, entries);
+  const ledgerRows = useMemo(() => {
+    return getLedgerForAccount(selectedAccountId, accounts, filteredEntries);
+  }, [selectedAccountId, accounts, filteredEntries]);
+
+  const accountBalances = useMemo(() => {
+    return getAccountBalances(accounts, filteredEntries);
+  }, [accounts, filteredEntries]);
+
   const balInfo = accountBalances[selectedAccountId];
 
   // Dynamically identify core liquid cash and bank accounts
@@ -84,8 +105,46 @@ export function LedgerSection({
   const bankBalance = bankAccount ? (accountBalances[bankAccount.id]?.balance || 0) : 0;
   const totalLiquidity = cashBalance + bankBalance;
 
-  const cashRows = cashAccount ? getLedgerForAccount(cashAccount.id, accounts, entries) : [];
-  const bankRows = bankAccount ? getLedgerForAccount(bankAccount.id, accounts, entries) : [];
+  const cashRows = useMemo(() => {
+    return cashAccount ? getLedgerForAccount(cashAccount.id, accounts, filteredEntries) : [];
+  }, [cashAccount, accounts, filteredEntries]);
+
+  const bankRows = useMemo(() => {
+    return bankAccount ? getLedgerForAccount(bankAccount.id, accounts, filteredEntries) : [];
+  }, [bankAccount, accounts, filteredEntries]);
+
+  const handleFilterChange = (start: string, end: string, preset: DatePreset) => {
+    setStartDate(start);
+    setEndDate(end);
+    setActivePreset(preset);
+  };
+
+  const filename = generateStatementFilename(
+    activeSubTab === 'lobby' ? 'General_Ledger_Cash_And_Bank' : `General_Ledger_${selectedAccount?.name || 'Account'}`,
+    startDate,
+    endDate,
+    sheetName
+  );
+
+  const handleExportPdf = async () => {
+    try {
+      setIsGeneratingPdf(true);
+      await exportElementToPdf({
+        elementId: 'ledger-printable-content',
+        filename,
+        defaultOrientation: activeSubTab === 'lobby' ? 'landscape' : 'portrait',
+        columnCount: 5,
+      });
+    } catch (err) {
+      console.error('Failed to export Ledger PDF:', err);
+    } finally {
+      setIsGeneratingPdf(false);
+    }
+  };
+
+  const handlePrint = () => {
+    triggerNativePrint(filename);
+  };
 
   return (
     <div className="space-y-6">
@@ -105,7 +164,7 @@ export function LedgerSection({
         <div className="flex bg-gray-100 rounded-lg p-1 text-sm font-medium">
           <button
             onClick={() => setActiveSubTab('lobby')}
-            className={`px-3 py-1.5 rounded-md transition-all flex items-center gap-1.5 ${
+            className={`px-3 py-1.5 rounded-md transition-all flex items-center gap-1.5 cursor-pointer ${
               activeSubTab === 'lobby'
                 ? 'bg-white text-blue-950 shadow-xs font-bold'
                 : 'text-gray-600 hover:text-gray-950 hover:bg-gray-50/50'
@@ -116,7 +175,7 @@ export function LedgerSection({
           </button>
           <button
             onClick={() => setActiveSubTab('all')}
-            className={`px-3 py-1.5 rounded-md transition-all flex items-center gap-1.5 ${
+            className={`px-3 py-1.5 rounded-md transition-all flex items-center gap-1.5 cursor-pointer ${
               activeSubTab === 'all'
                 ? 'bg-white text-blue-950 shadow-xs font-bold'
                 : 'text-gray-600 hover:text-gray-950 hover:bg-gray-50/50'
@@ -128,8 +187,34 @@ export function LedgerSection({
         </div>
       </div>
 
-      {activeSubTab === 'lobby' ? (
-        <div className="space-y-6">
+      {/* Reusable Date Range Filter & Export Bar */}
+      <DateRangeFilter
+        startDate={startDate}
+        endDate={endDate}
+        activePreset={activePreset}
+        onFilterChange={handleFilterChange}
+        onPrint={handlePrint}
+        onExportPdf={handleExportPdf}
+        isGeneratingPdf={isGeneratingPdf}
+        totalRecords={entries.length}
+        filteredRecords={filteredEntries.length}
+        statementTitle={activeSubTab === 'lobby' ? 'Cash & Bank Ledger' : `${selectedAccount?.name} Ledger`}
+      />
+
+      {/* Main Ledger Content Container */}
+      <div id="ledger-printable-content" className="statement-sheet bg-white border border-gray-200 rounded-xl p-4 sm:p-6 shadow-xs space-y-6">
+        {/* Dynamic Statement Paper Header */}
+        <StatementPaperHeader
+          sheetName={sheetName}
+          statementTitle={activeSubTab === 'lobby' ? 'Cash & Bank Dual General Ledger' : `${selectedAccount?.name} Sub-Ledger Registry`}
+          subtitle={activeSubTab === 'lobby' ? 'Real-time liquid register postings and running balances' : `Classification: ${selectedAccount?.type} Account • Double-entry ledger postings`}
+          startDate={startDate}
+          endDate={endDate}
+          academicYear={academicYear}
+        />
+
+        {activeSubTab === 'lobby' ? (
+          <div className="space-y-6">
           {/* Liquidity Highlighting KPI widgets */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 font-sans">
             <div className="p-4 border border-amber-100 bg-amber-50/15 rounded-xl flex items-center justify-between">
@@ -475,10 +560,19 @@ export function LedgerSection({
         </div>
       )}
 
+      {/* Verification and signature block */}
+      <VerificationBlock
+        treasurerName={treasurerName}
+        treasurerEmail={treasurerEmail}
+        academicYear={academicYear}
+      />
+    </div>
+
       {/* Full Screen Audit Printable Ledger Report Modal */}
       {printAccount && (() => {
-        const rows = getLedgerForAccount(printAccount.id, accounts, entries);
+        const rows = getLedgerForAccount(printAccount.id, accounts, filteredEntries);
         const bal = accountBalances[printAccount.id];
+        const modalFilename = generateStatementFilename(`General_Ledger_${printAccount.name}`, startDate, endDate, sheetName);
         const currentDate = new Date().toLocaleDateString('en-IN', {
           year: 'numeric',
           month: 'long',
@@ -486,6 +580,26 @@ export function LedgerSection({
           hour: '2-digit',
           minute: '2-digit'
         });
+
+        const handleModalExportPdf = async () => {
+          try {
+            setIsGeneratingPdf(true);
+            await exportElementToPdf({
+              elementId: 'ledger-pdf-printable',
+              filename: modalFilename,
+              defaultOrientation: 'portrait',
+              columnCount: 5,
+            });
+          } catch (err) {
+            console.error(err);
+          } finally {
+            setIsGeneratingPdf(false);
+          }
+        };
+
+        const handleModalPrint = () => {
+          triggerNativePrint(modalFilename);
+        };
 
         return (
           <div className="fixed inset-0 bg-slate-900/90 z-50 flex flex-col md:flex-row p-3 md:p-6 select-none animate-fade-in no-print-backdrop">

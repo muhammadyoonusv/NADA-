@@ -66,3 +66,123 @@ html, body, input, button, select, textarea {
   font-feature-settings: "lnum" 1, "tnum" 1;
 }
 
+/* ==========================================================================
+   PIXEL-PERFECT A4 PRINTING & PDF EXPORT STYLESHEET
+   ========================================================================== */
+@media print {
+  @page {
+    size: A4 portrait;
+    margin: 10mm 10mm 10mm 10mm;
+  }
+
+  body {
+    background-color: #ffffff !important;
+    background: #ffffff !important;
+    color: #0f172a !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    font-size: 10pt !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  /* Universal hide for screen-only controls, navigation, floating chat bot, and filter bars */
+  .no-print,
+  .no-print *,
+  header,
+  nav,
+  aside,
+  button,
+  .chat-widget,
+  .controls-panel,
+  .tab-bar,
+  #aicallout-widget,
+  .bottom-nav {
+    display: none !important;
+  }
+
+  /* Force printable sheet containers to 100% full width with no margins/borders */
+  .container,
+  .max-w-4xl,
+  .max-w-5xl,
+  .max-w-6xl,
+  .max-w-7xl,
+  .statement-sheet,
+  .printable-sheet,
+  #journal-printable-sheet,
+  #trial-balance-printable,
+  #receipts-payments-printable,
+  #income-expenditure-printable,
+  #review-pdf-printable,
+  #ledger-printable-content,
+  #balance-sheet-printable {
+    max-width: 100% !important;
+    width: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    border: none !important;
+    box-shadow: none !important;
+    background: #ffffff !important;
+  }
+
+  /* Table auto-fit: force all columns to fit within 100% width of paper without horizontal overflow */
+  table {
+    width: 100% !important;
+    max-width: 100% !important;
+    border-collapse: collapse !important;
+    table-layout: auto !important;
+    page-break-inside: auto;
+    font-size: 9pt !important;
+    box-sizing: border-box !important;
+  }
+
+  th {
+    background-color: #f1f5f9 !important;
+    color: #0f172a !important;
+    font-size: 8pt !important;
+    text-transform: uppercase !important;
+    letter-spacing: 0.05em !important;
+    padding: 6px 8px !important;
+    border: 1px solid #cbd5e1 !important;
+    white-space: nowrap !important;
+  }
+
+  td {
+    padding: 6px 8px !important;
+    border: 1px solid #cbd5e1 !important;
+    font-size: 8.5pt !important;
+    word-break: break-word !important;
+    overflow-wrap: break-word !important;
+    vertical-align: middle !important;
+  }
+
+  /* Repeat table headers at top of page 2, 3, etc. */
+  thead {
+    display: table-header-group !important;
+  }
+
+  tfoot {
+    display: table-footer-group !important;
+  }
+
+  /* Prevent row, card, and signature splitting mid-way across page breaks */
+  tr,
+  .card,
+  .summary-card,
+  .summary-cards,
+  .verification-block,
+  .sign-row,
+  .sign-box,
+  .statement-header {
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+    -webkit-column-break-inside: avoid !important;
+  }
+
+  /* Landscape page helper */
+  .print-landscape {
+    page: landscape;
+  }
+}
+
+
