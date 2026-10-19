@@ -106,8 +106,8 @@ export default function App() {
   const [allowedEmails, setAllowedEmails] = useState<string[]>(['klrmuhsin809@gmail.com', 'yoonuschr@gmail.com']);
   const [authLoading, setAuthLoading] = useState(true);
 
-  // Helper: Access validation checker - permits editing by default in development/standalone preview or when signed in as authorized editor
-  const isEditor = !currentUser || !!(currentUser && currentUser.email && (
+  // Helper: Access validation checker - permits editing only when signed in as authorized editor
+  const isEditor = !!(currentUser && currentUser.email && (
     currentUser.email.toLowerCase() === 'klrmuhsin809@gmail.com' ||
     currentUser.email.toLowerCase() === 'yoonuschr@gmail.com' ||
     allowedEmails.some(e => e.trim().toLowerCase() === currentUser.email?.trim().toLowerCase())

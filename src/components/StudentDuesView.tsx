@@ -85,16 +85,8 @@ export function StudentDuesView({
   onDeleteProgram
 }: StudentDuesViewProps) {
   // Navigation & Directory state
-  const [activeView, setActiveView] = useState<'folders' | 'program_details' | 'roster'>(isEditor ? 'folders' : 'roster');
+  const [activeView, setActiveView] = useState<'folders' | 'program_details' | 'roster'>('folders');
   const [selectedProgramId, setSelectedProgramId] = useState<string | null>(null);
-
-  // Hard enforce visitor to master roster-only lookup when not authorized editor
-  useEffect(() => {
-    if (!isEditor) {
-      setActiveView('roster');
-      setSelectedProgramId(null);
-    }
-  }, [isEditor]);
 
   // Search & Filter state
   const [searchTerm, setSearchTerm] = useState('');
@@ -1283,7 +1275,7 @@ export function StudentDuesView({
       )}
 
       {/* ======================= VIEW 1: DIRECTORY FOLDERS ======================= */}
-      {activeView === 'folders' && isEditor && (
+      {activeView === 'folders' && (
         <div className="space-y-6">
           <div className="flex items-center justify-between">
             <h3 className="text-sm font-extrabold text-slate-800 uppercase tracking-wider font-mono">
@@ -1300,13 +1292,15 @@ export function StudentDuesView({
                   You do not have any sub-programs driving union dues yet. Add folder campaigns like Excursion, Ramadan Feast, or Annual day to separate dues metrics.
                 </p>
               </div>
-              <button
-                onClick={() => setIsAddProgramOpen(true)}
-                className="inline-flex items-center gap-1.5 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-xl cursor-pointer shadow-xs"
-              >
-                <FolderPlus size={13} />
-                Create First Program Folder
-              </button>
+              {isEditor && (
+                <button
+                  onClick={() => setIsAddProgramOpen(true)}
+                  className="inline-flex items-center gap-1.5 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-xl cursor-pointer shadow-xs"
+                >
+                  <FolderPlus size={13} />
+                  Create First Program Folder
+                </button>
+              )}
             </div>
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5 text-left">
@@ -1487,13 +1481,13 @@ export function StudentDuesView({
                   <th className="p-4">Sl No</th>
                   <th className="p-4">Student Name</th>
                   <th className="p-4">Particular Notes</th>
-                  <th className="p-4 text-right">Actions</th>
+                  {isEditor && <th className="p-4 text-right">Actions</th>}
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-105">
                 {filteredRows.length === 0 ? (
                   <tr>
-                    <td colSpan={4} className="p-12 text-slate-400 text-center">
+                    <td colSpan={isEditor ? 4 : 3} className="p-12 text-slate-400 text-center">
                       <Users size={20} className="mx-auto mb-2 text-slate-300" />
                       <p>No master student records match query.</p>
                     </td>
@@ -1504,26 +1498,28 @@ export function StudentDuesView({
                       <td className="p-4 font-bold font-mono text-slate-900">{idx + 1}</td>
                       <td className="p-4 text-slate-900 font-semibold">{stu.name}</td>
                       <td className="p-4 text-slate-400 text-[11px]">{stu.remarks || <span className="italic text-gray-200">No remarks</span>}</td>
-                      <td className="p-4 text-right">
-                        <div className="inline-flex items-center gap-1">
-                          <button
-                            type="button"
-                            onClick={() => handleOpenEditMaster(stu)}
-                            className="p-1.5 text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 border border-gray-200 hover:border-indigo-300 rounded-md transition-colors cursor-pointer"
-                            title="Edit student profile"
-                          >
-                            <Edit size={12} />
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => setDeletingStudentId(stu.id)}
-                            className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 border border-gray-200 hover:border-rose-300 rounded-md transition-colors cursor-pointer"
-                            title="Delete student profile"
-                          >
-                            <Trash2 size={12} />
-                          </button>
-                        </div>
-                      </td>
+                      {isEditor && (
+                        <td className="p-4 text-right">
+                          <div className="inline-flex items-center gap-1">
+                            <button
+                              type="button"
+                              onClick={() => handleOpenEditMaster(stu)}
+                              className="p-1.5 text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 border border-gray-200 hover:border-indigo-300 rounded-md transition-colors cursor-pointer"
+                              title="Edit student profile"
+                            >
+                              <Edit size={12} />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setDeletingStudentId(stu.id)}
+                              className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 border border-gray-200 hover:border-rose-300 rounded-md transition-colors cursor-pointer"
+                              title="Delete student profile"
+                            >
+                              <Trash2 size={12} />
+                            </button>
+                          </div>
+                        </td>
+                      )}
                     </tr>
                   ))
                 )}
@@ -1554,23 +1550,25 @@ export function StudentDuesView({
                     </div>
                   )}
 
-                  <div className="flex gap-2 pt-1 border-t border-slate-100">
-                    <button
-                      type="button"
-                      onClick={() => handleOpenEditMaster(stu)}
-                      className="flex-1 inline-flex items-center justify-center gap-1.5 py-2.5 border border-indigo-200 hover:border-indigo-600 bg-indigo-50 hover:bg-indigo-600 text-indigo-750 hover:text-white rounded-lg text-xs font-bold transition-all cursor-pointer"
-                    >
-                      <Edit size={12} /> Edit Details
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setDeletingStudentId(stu.id)}
-                      className="px-3.5 py-2.5 text-rose-600 hover:text-white border border-rose-200 hover:border-rose-600 bg-rose-50 hover:bg-rose-600 rounded-lg transition-all flex items-center justify-center cursor-pointer"
-                      title="Delete profile"
-                    >
-                      <Trash2 size={13} />
-                    </button>
-                  </div>
+                   {isEditor && (
+                     <div className="flex gap-2 pt-1 border-t border-slate-100">
+                       <button
+                         type="button"
+                         onClick={() => handleOpenEditMaster(stu)}
+                         className="flex-1 inline-flex items-center justify-center gap-1.5 py-2.5 border border-indigo-200 hover:border-indigo-600 bg-indigo-50 hover:bg-indigo-600 text-indigo-750 hover:text-white rounded-lg text-xs font-bold transition-all cursor-pointer"
+                       >
+                         <Edit size={12} /> Edit Details
+                       </button>
+                       <button
+                         type="button"
+                         onClick={() => setDeletingStudentId(stu.id)}
+                         className="px-3.5 py-2.5 text-rose-600 hover:text-white border border-rose-200 hover:border-rose-600 bg-rose-50 hover:bg-rose-600 rounded-lg transition-all flex items-center justify-center cursor-pointer"
+                         title="Delete profile"
+                       >
+                         <Trash2 size={13} />
+                       </button>
+                     </div>
+                   )}
                 </div>
               ))
             )}
@@ -1668,8 +1666,7 @@ export function StudentDuesView({
           </div>
 
           {/* Real-time stats panels for active program */}
-          {isEditor && (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
               
               <div className="bg-white border border-gray-200 p-5 rounded-2xl flex items-center justify-between shadow-3xs hover:shadow-xs transition-shadow">
                 <div className="space-y-1">
@@ -1720,8 +1717,7 @@ export function StudentDuesView({
                 </div>
               </div>
 
-            </div>
-          )}
+          </div>
 
           {/* Directory Navigation Controls / Search */}
           <div className="bg-white p-4 border border-gray-200 rounded-2xl flex flex-col md:flex-row justify-between items-center gap-3">
@@ -1830,13 +1826,13 @@ export function StudentDuesView({
                     </th>
                     <th className="p-4 text-center">Status</th>
                     <th className="p-4">Paid Date / Tracking Remarks</th>
-                    <th className="p-4 text-right">Actions</th>
+                    {isEditor && <th className="p-4 text-right">Actions</th>}
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-105">
                   {filteredRows.length === 0 ? (
                     <tr>
-                      <td colSpan={9} className="p-12 text-slate-400 text-center">
+                      <td colSpan={isEditor ? 9 : 8} className="p-12 text-slate-400 text-center">
                         <Users size={20} className="mx-auto mb-2 text-slate-300" />
                         <p>No student payments found matching your filter selection.</p>
                       </td>
@@ -1942,39 +1938,41 @@ export function StudentDuesView({
                           </td>
 
                           {/* Pay, Edit & deletion actions */}
-                          <td className="p-4 text-right whitespace-nowrap">
-                            <div className="inline-flex items-center gap-1.5 justify-end">
-                              {balance > 0 ? (
+                          {isEditor && (
+                            <td className="p-4 text-right whitespace-nowrap">
+                              <div className="inline-flex items-center gap-1.5 justify-end">
+                                {balance > 0 ? (
+                                  <button
+                                    type="button"
+                                    onClick={() => handleSelectPayStudent(row.student.id, row.dues)}
+                                    className="inline-flex items-center gap-1 px-2.5 py-1 bg-emerald-50 hover:bg-emerald-600 text-emerald-700 hover:text-white border border-emerald-200 hover:border-emerald-600 rounded-md text-[10px] font-extrabold cursor-pointer transition-all shadow-3xs"
+                                  >
+                                    <CreditCard size={10} /> Record Pay
+                                  </button>
+                                ) : (
+                                  <span className="px-2 py-0.5 text-[10px] font-bold text-emerald-600 bg-emerald-100/50 rounded-md flex items-center gap-0.5 flex-row">
+                                    <Check size={11} /> Settled
+                                  </span>
+                                )}
                                 <button
                                   type="button"
-                                  onClick={() => handleSelectPayStudent(row.student.id, row.dues)}
-                                  className="inline-flex items-center gap-1 px-2.5 py-1 bg-emerald-50 hover:bg-emerald-600 text-emerald-700 hover:text-white border border-emerald-200 hover:border-emerald-600 rounded-md text-[10px] font-extrabold cursor-pointer transition-all shadow-3xs"
+                                  onClick={() => handleOpenEditMaster(row.student)}
+                                  className="p-1.5 text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 border border-gray-200 hover:border-indigo-300 rounded-md transition-colors cursor-pointer shadow-3xs"
+                                  title="Edit student details"
                                 >
-                                  <CreditCard size={10} /> Record Pay
+                                  <Edit size={12} />
                                 </button>
-                              ) : (
-                                <span className="px-2 py-0.5 text-[10px] font-bold text-emerald-600 bg-emerald-100/50 rounded-md flex items-center gap-0.5 flex-row">
-                                  <Check size={11} /> Settled
-                                </span>
-                              )}
-                              <button
-                                type="button"
-                                onClick={() => handleOpenEditMaster(row.student)}
-                                className="p-1.5 text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 border border-gray-200 hover:border-indigo-300 rounded-md transition-colors cursor-pointer shadow-3xs"
-                                title="Edit student details"
-                              >
-                                <Edit size={12} />
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => handleRemoveStudentFromProgram(row.student.id)}
-                                className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 border border-gray-200 hover:border-rose-300 rounded-md transition-colors cursor-pointer shadow-3xs"
-                                title="Remove student from this nada"
-                              >
-                                <Trash2 size={12} />
-                              </button>
-                            </div>
-                          </td>
+                                <button
+                                  type="button"
+                                  onClick={() => handleRemoveStudentFromProgram(row.student.id)}
+                                  className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 border border-gray-200 hover:border-rose-300 rounded-md transition-colors cursor-pointer shadow-3xs"
+                                  title="Remove student from this nada"
+                                >
+                                  <Trash2 size={12} />
+                                </button>
+                              </div>
+                            </td>
+                          )}
 
                         </tr>
                       );
@@ -2089,37 +2087,39 @@ export function StudentDuesView({
                     )}
 
                     {/* Actions panel */}
-                    <div className="flex gap-2 pt-1 border-t border-slate-100">
-                      {balance > 0 ? (
+                    {isEditor && (
+                      <div className="flex gap-2 pt-1 border-t border-slate-100">
+                        {balance > 0 ? (
+                          <button
+                            type="button"
+                            onClick={() => handleSelectPayStudent(row.student.id, row.dues)}
+                            className="flex-1 inline-flex items-center justify-center gap-1.5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-extrabold cursor-pointer transition-all shadow-3xs"
+                          >
+                            <CreditCard size={12} /> Record Pay
+                          </button>
+                        ) : (
+                          <div className="flex-1 py-2.5 bg-emerald-50 text-emerald-700 rounded-lg text-xs font-bold flex items-center justify-center gap-1 border border-emerald-150">
+                            <Check size={12} /> Balance Settled
+                          </div>
+                        )}
                         <button
                           type="button"
-                          onClick={() => handleSelectPayStudent(row.student.id, row.dues)}
-                          className="flex-1 inline-flex items-center justify-center gap-1.5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-extrabold cursor-pointer transition-all shadow-3xs"
+                          onClick={() => handleOpenEditMaster(row.student)}
+                          className="px-3 py-2.5 text-indigo-700 hover:text-white border border-indigo-200 hover:border-indigo-600 bg-indigo-50 hover:bg-indigo-600 rounded-lg transition-all cursor-pointer flex items-center justify-center gap-1 text-xs font-bold"
+                          title="Edit student details"
                         >
-                          <CreditCard size={12} /> Record Pay
+                          <Edit size={12} /> Edit
                         </button>
-                      ) : (
-                        <div className="flex-1 py-2.5 bg-emerald-50 text-emerald-700 rounded-lg text-xs font-bold flex items-center justify-center gap-1 border border-emerald-150">
-                          <Check size={12} /> Balance Settled
-                        </div>
-                      )}
-                      <button
-                        type="button"
-                        onClick={() => handleOpenEditMaster(row.student)}
-                        className="px-3 py-2.5 text-indigo-700 hover:text-white border border-indigo-200 hover:border-indigo-600 bg-indigo-50 hover:bg-indigo-600 rounded-lg transition-all cursor-pointer flex items-center justify-center gap-1 text-xs font-bold"
-                        title="Edit student details"
-                      >
-                        <Edit size={12} /> Edit
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => handleRemoveStudentFromProgram(row.student.id)}
-                        className="px-3 py-2.5 text-slate-405 hover:text-rose-605 hover:bg-rose-50 border border-slate-205 hover:border-rose-205 rounded-lg transition-all cursor-pointer flex items-center justify-center"
-                        title="Remove student from this nada"
-                      >
-                        <Trash2 size={13} />
-                      </button>
-                    </div>
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveStudentFromProgram(row.student.id)}
+                          className="px-3 py-2.5 text-slate-405 hover:text-rose-605 hover:bg-rose-50 border border-slate-205 hover:border-rose-205 rounded-lg transition-all cursor-pointer flex items-center justify-center"
+                          title="Remove student from this nada"
+                        >
+                          <Trash2 size={13} />
+                        </button>
+                      </div>
+                    )}
                   </div>
                 );
               })
