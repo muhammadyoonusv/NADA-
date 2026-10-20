@@ -58,7 +58,7 @@ export function HomePage({
   currentUser,
   isEditor = false,
   sheetName = 'NADA',
-  sheetTagline = 'Accountability for a Better Tomorrow',
+  sheetTagline = '19th Batch',
   onNavigateToTab,
   onOpenAddEntry,
   onOpenPdfModal,

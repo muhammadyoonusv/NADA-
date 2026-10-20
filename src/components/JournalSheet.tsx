@@ -116,7 +116,7 @@ export function JournalSheet({
   onClearAll,
   onImportBackup,
   sheetName = 'Class Union Ledger',
-  sheetTagline = 'Double-entry accounting, instant trials, cash summaries & Balance sheets',
+  sheetTagline = '19th Batch',
   treasurerName = 'Union Treasurer',
   treasurerEmail = 'klrmuhsin809@gmail.com',
   academicYear = '2026 - 2027',

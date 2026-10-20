@@ -226,7 +226,18 @@ export default function App() {
 
   // Profile and sheet details state
   const [sheetName, setSheetName] = useState(() => localStorage.getItem('app_sheet_name') || 'NADA');
-  const [sheetTagline, setSheetTagline] = useState(() => localStorage.getItem('app_sheet_tagline') || 'Accountability for a Better Tomorrow');
+  const [sheetTagline, setSheetTagline] = useState(() => {
+    const saved = localStorage.getItem('app_sheet_tagline');
+    if (!saved || saved === 'Accountability for a Better Tomorrow' || saved.includes('Double-entry accounting')) {
+      try {
+        localStorage.setItem('app_sheet_tagline', '19th Batch');
+      } catch (e) {
+        // ignore
+      }
+      return '19th Batch';
+    }
+    return saved;
+  });
   const [treasurerName, setTreasurerName] = useState(() => localStorage.getItem('app_treasurer_name') || 'Union Treasurer');
   const [treasurerEmail, setTreasurerEmail] = useState(() => localStorage.getItem('app_treasurer_email') || '');
   const [academicYear, setAcademicYear] = useState(() => localStorage.getItem('app_academic_year') || '2026 - 2027');
@@ -280,7 +291,6 @@ export default function App() {
 
       if (snapshot.empty) {
         if (isEditor) {
-          // Init accounts with defaults if empty
           try {
             const batch = writeBatch(db);
             DEFAULT_ACCOUNTS.forEach((acc) => {
@@ -295,7 +305,6 @@ export default function App() {
           setLoadingAccounts(false);
         }
       } else {
-        // Ensure all DEFAULT_ACCOUNTS (e.g. Donation Account id: 12) exist in the list!
         const existingMap = new Map<string, Account>();
         list.forEach(a => {
           existingMap.set(a.id, a);
@@ -376,7 +385,7 @@ export default function App() {
           try {
             await setDoc(doc(db, 'metadata', 'config'), {
               sheetName: sheetName || 'Class Union Ledger',
-              sheetTagline: sheetTagline || 'Double-entry accounting, instant trials, cash summaries & Balance sheets',
+              sheetTagline: sheetTagline || '19th Batch',
               treasurerName: treasurerName || 'Union Treasurer',
               treasurerEmail: treasurerEmail || '',
               academicYear: academicYear || '2026 - 2027',
@@ -394,8 +403,12 @@ export default function App() {
           localStorage.setItem('app_sheet_name', data.sheetName);
         }
         if (data.sheetTagline !== undefined) {
-          setSheetTagline(data.sheetTagline);
-          localStorage.setItem('app_sheet_tagline', data.sheetTagline);
+          const isOldDefault = !data.sheetTagline ||
+            data.sheetTagline === 'Accountability for a Better Tomorrow' ||
+            data.sheetTagline.includes('Double-entry accounting');
+          const val = isOldDefault ? '19th Batch' : data.sheetTagline;
+          setSheetTagline(val);
+          localStorage.setItem('app_sheet_tagline', val);
         }
         if (data.treasurerName) {
           setTreasurerName(data.treasurerName);
@@ -413,7 +426,6 @@ export default function App() {
           setLogoIcon(data.logoIcon);
           localStorage.setItem('app_logo_icon', data.logoIcon);
         } else {
-          // Keep local cached logo/photo if cloud schema is 6-field without logoIcon
           const localLogo = localStorage.getItem('app_logo_icon');
           if (localLogo) setLogoIcon(localLogo);
         }
@@ -453,7 +465,6 @@ export default function App() {
         if (studentObj && 'phone' in studentObj) {
           delete studentObj.phone;
         }
-        // Normalize any legacy roll numbers offset above 100 (e.g. ROLL-101..ROLL-135 -> ROLL-1..ROLL-35)
         if (studentObj && studentObj.id) {
           const match = studentObj.id.match(/^(?:ROLL-|QURAN-)?(1\d{2})$/i);
           if (match) {
@@ -463,7 +474,6 @@ export default function App() {
             }
           }
         }
-        // Remove all Quran related data and add them as members of the class
         if (!studentObj.className || /quran/i.test(studentObj.className)) {
           studentObj.className = 'Class Member';
         }
@@ -538,7 +548,7 @@ export default function App() {
   const uploadFileChunks = async (file: { name: string; type: string; size: number; base64?: string }): Promise<{ id: string; name: string; type: string; size: number; chunkCount: number }> => {
     const fileId = 'file_' + Date.now() + '_' + Math.random().toString(36).substr(2, 4);
     const base64 = file.base64 || '';
-    const chunkSize = 250000; // 250,000 characters chunk size (around ~180-250 KB)
+    const chunkSize = 250000;
     const numChunks = Math.ceil(base64.length / chunkSize);
     
     const promises = [];
@@ -566,7 +576,6 @@ export default function App() {
     };
   };
 
-  // Helper to delete chunks of a file
   const deleteFileChunks = async (fileId: string, chunkCount: number) => {
     const promises = [];
     for (let i = 0; i < chunkCount; i++) {
@@ -576,7 +585,6 @@ export default function App() {
     await Promise.all(promises).catch(err => console.error("Error deleting old chunks:", err));
   };
 
-  // Helper to fetch file chunks from remote database
   const handleFetchFileChunks = async (fileId: string, chunkCount: number): Promise<string> => {
     try {
       const chunks: string[] = new Array(chunkCount);
@@ -611,15 +619,12 @@ export default function App() {
       return false;
     }
 
-    // Instantly confirm success and return true so the form closes and clears immediately without any delay!
     showToast('The entry or attachment was successfully uploaded.', 'success');
 
-    // Run the actual Firestore and attachment uploads completely in the background
     (async () => {
       try {
         const entryId = 'tx_' + Date.now() + '_' + Math.random().toString(36).substr(2, 4);
 
-        // Create initial metadata placeholders for new files to display they are uploading
         const filesToProcess = newEntry.files || [];
         const initialFiles = filesToProcess.map((file, idx) => {
           const tempId = (file as any).id || ('f_' + Date.now() + '_' + idx + '_' + Math.random().toString(36).substr(2, 4));
@@ -651,10 +656,8 @@ export default function App() {
           entry.files = initialFiles;
         }
 
-        // Save core metadata to Firestore (non-blocking)
         await setDoc(doc(db, 'entries', entryId), entry);
 
-        // Perform chunk processing & uploading in background
         if (filesToProcess.length > 0) {
           const processedFiles = await Promise.all(
             filesToProcess.map(async (file, idx) => {
@@ -690,7 +693,6 @@ export default function App() {
             })
           );
 
-          // Update file structures containing base64 data
           await setDoc(doc(db, 'entries', entryId), {
             ...entry,
             files: processedFiles,
@@ -713,13 +715,10 @@ export default function App() {
       return false;
     }
 
-    // Instantly confirm success and return true so the form closes and clears immediately without any delay!
     showToast('The entry or attachment was successfully uploaded.', 'success');
 
-    // Run the actual updates completely in the background
     (async () => {
       try {
-        // Purge obsolete file chunks for files deleted in edit in parallel background
         const existingEntry = entries.find(e => e.id === updated.id);
         if (existingEntry && existingEntry.files) {
           const remainingIds = new Set((updated.files || []).map((f) => (f as any).id).filter(Boolean));
@@ -729,10 +728,8 @@ export default function App() {
           Promise.all(deletePromises).catch(err => console.error("Error purging obsolete file chunks:", err));
         }
 
-        // Setup file descriptors for the update
         const filesToProcess = updated.files || [];
         const initialFiles = filesToProcess.map((file, idx) => {
-          // If file already exists and is not modified (no new upload required), keep it intact
           if ((file as any).id && !(file as any).base64) {
             return {
               name: file.name || '',
@@ -744,7 +741,6 @@ export default function App() {
             };
           }
           
-          // New file or modified file: set status to uploading
           const tempId = (file as any).id || ('f_' + Date.now() + '_' + idx + '_' + Math.random().toString(36).substr(2, 4));
           return {
             name: file.name || '',
@@ -774,10 +770,8 @@ export default function App() {
           entry.files = initialFiles;
         }
 
-        // Save core metadata to Firestore in the background
         await setDoc(doc(db, 'entries', updated.id), entry);
 
-        // Do new file uploads in the background
         const hasNewUploads = filesToProcess.some(f => f.base64);
         if (hasNewUploads) {
           const processedFiles = await Promise.all(
@@ -813,7 +807,6 @@ export default function App() {
                   };
                 }
               } else {
-                // Keep already uploaded files
                 const cleanRes: any = {
                   name: file.name || '',
                   type: file.type || '',
@@ -890,7 +883,6 @@ export default function App() {
       return;
     }
     try {
-      // 1. Clean up file chunks associated with deleted entry in parallel
       const existingEntry = entries.find(e => e.id === id);
       if (existingEntry && existingEntry.files) {
         const deletePromises = existingEntry.files
@@ -1042,14 +1034,13 @@ export default function App() {
             batch.set(doc(db, 'students', stu.id), stu);
           });
 
-          // Reset metadata to default but exclude whitelist editors explicitly
           batch.set(doc(db, 'metadata', 'config'), {
             sheetName: 'Class Union Ledger',
-            sheetTagline: 'Double-entry accounting, instant trials, cash summaries & Balance sheets',
+            sheetTagline: '19th Batch',
             treasurerName: 'Union Treasurer',
             treasurerEmail: '',
             academicYear: '2026 - 2027',
-            allowedEmails: allowedEmails // Preserved Whitelist list editors
+            allowedEmails: allowedEmails
           });
           
           await batch.commit();
@@ -1061,7 +1052,6 @@ export default function App() {
     });
   };
 
-  // Import JSON backup
   const onImportBackup = async (rawContent: string): Promise<boolean> => {
     if (!isEditor) {
       showToast('Access denied: You do not have permission to import files. Only authorized editors can alter ledger data.', 'err');
@@ -1072,13 +1062,11 @@ export default function App() {
       if (data && Array.isArray(data.accounts) && Array.isArray(data.entries)) {
         const ops: Array<{ ref: any; type: 'set' | 'delete'; data?: any }> = [];
         
-        // Clear existing accounts & entries
         const accountsSnap = await getDocs(collection(db, 'accounts'));
         const entriesSnap = await getDocs(collection(db, 'entries'));
         accountsSnap.forEach(d => ops.push({ ref: d.ref, type: 'delete' }));
         entriesSnap.forEach(d => ops.push({ ref: d.ref, type: 'delete' }));
 
-        // Queue sets for accounts & entries
         data.accounts.forEach((acc: Account) => {
           ops.push({ ref: doc(db, 'accounts', acc.id), type: 'set', data: acc });
         });
@@ -1086,7 +1074,6 @@ export default function App() {
           ops.push({ ref: doc(db, 'entries', entry.id), type: 'set', data: entry });
         });
 
-        // Clear and queue sets for students (if present in backup)
         let hasStudents = false;
         if (data.students && Array.isArray(data.students)) {
           hasStudents = true;
@@ -1097,7 +1084,6 @@ export default function App() {
           });
         }
 
-        // Clear and queue sets for programs/campaigns (if present in backup)
         let hasPrograms = false;
         if (data.programs && Array.isArray(data.programs)) {
           hasPrograms = true;
@@ -1108,7 +1094,6 @@ export default function App() {
           });
         }
 
-        // Execute operations in chunked batches (to respect Firestore limit of 500 per batch)
         let batch = writeBatch(db);
         let count = 0;
         for (const op of ops) {
@@ -1251,7 +1236,6 @@ export default function App() {
     }
   };
 
-  // Update cloud settings & profile configurations
   const handleSaveConfig = async (config: {
     sheetName: string;
     sheetTagline: string;
@@ -1265,7 +1249,6 @@ export default function App() {
       showToast('Access denied: Only authorized editors can update settings.', 'err');
       throw new Error('Access denied: Only authorized editors can update settings.');
     }
-    // Optimistic local state update for instant UI feedback
     setSheetName(config.sheetName);
     setSheetTagline(config.sheetTagline);
     setTreasurerName(config.treasurerName);
@@ -1273,7 +1256,6 @@ export default function App() {
     setAcademicYear(config.academicYear);
     setLogoIcon(config.logoIcon);
 
-    // Save locally immediately so custom photo/emblem and settings are never lost across reloads
     try {
       localStorage.setItem('app_sheet_name', config.sheetName);
       localStorage.setItem('app_sheet_tagline', config.sheetTagline);
@@ -1291,7 +1273,6 @@ export default function App() {
       ? config.allowedEmails
       : ['klrmuhsin809@gmail.com', 'yoonuschr@gmail.com'];
 
-    // Standard 6-field payload (strictly compliant with original deployed Firestore rules requiring exactly 6 keys)
     const standard6Payload = {
       sheetName: (config.sheetName || 'Class Union Ledger').trim().slice(0, 200),
       sheetTagline: (config.sheetTagline || '').trim().slice(0, 500),
@@ -1301,13 +1282,11 @@ export default function App() {
       allowedEmails: finalAllowedEmails.slice(0, 100)
     };
 
-    // Extended 7-field payload (including custom logo / emblem)
     const extended7Payload = {
       ...standard6Payload,
       logoIcon: config.logoIcon || 'FolderLock'
     };
 
-    // Fire non-blocking asynchronous cloud save
     (async () => {
       try {
         await setDoc(doc(db, 'metadata', 'config'), extended7Payload);
@@ -1335,9 +1314,7 @@ export default function App() {
     showToast('Authorized whitelist updated successfully!', 'success');
   };
 
-  // Instant save on click for Logo/Photo Emblem
   const handleQuickUpdateLogo = (newLogo: string) => {
-    // 0ms instant UI update
     setLogoIcon(newLogo);
     try {
       localStorage.setItem('app_logo_icon', newLogo);
@@ -1345,7 +1322,6 @@ export default function App() {
       console.warn('Local storage error:', e);
     }
 
-    // Non-blocking fire-and-forget background cloud sync
     if (isEditor) {
       const finalAllowedEmails = allowedEmails && allowedEmails.length > 0
         ? allowedEmails
@@ -1487,16 +1463,27 @@ export default function App() {
                 </button>
               </div>
               <p className="text-[11px] sm:text-xs font-bold text-slate-700 leading-tight mt-0.5">
-                Union Ledger
+                19th Batch
               </p>
               <p className="text-[9.5px] sm:text-[10.5px] text-slate-400 font-medium leading-tight truncate max-w-[140px] sm:max-w-xs">
-                {sheetTagline}
+                {sheetTagline || '19th Batch'}
               </p>
             </div>
           </div>
 
           <div className="flex items-center gap-1.5 sm:gap-2.5 shrink-0">
-            {/* Gemini AI Header Button */}
+            {/* Direct Link to Google Gemini in the SAME TAB (Breaks out of iframe via target="_top") */}
+            <a
+              href="https://gemini.google.com"
+              target="_top"
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 hover:opacity-95 text-white text-xs font-bold transition-all shadow-3xs cursor-pointer"
+              title="Open Gemini AI in this tab"
+            >
+              <Sparkles size={14} className="text-white animate-pulse" />
+              <span>Open Gemini</span>
+            </a>
+
+            {/* Gemini AI In-App Header Button */}
             <button
               type="button"
               onClick={() => setIsBotOpen(true)}
@@ -1598,7 +1585,7 @@ export default function App() {
               </button>
             )}
 
-            {/* Three-Dot Options Dropdown (Settings, Logout, and Guide) */}
+            {/* Three-Dot Options Dropdown */}
             <div className="relative">
               <button
                 id="top-three-dot-menu-button"
@@ -1613,15 +1600,12 @@ export default function App() {
 
               {isTopMenuOpen && (
                 <>
-                  {/* Backdrop dismiss overlay */}
                   <div
                     className="fixed inset-0 z-40 bg-transparent"
                     onClick={() => setIsTopMenuOpen(false)}
                   />
                   
-                  {/* Dropdown Menu */}
                   <div className="absolute right-0 mt-2 w-40 sm:w-44 bg-white rounded-xl shadow-xl border border-gray-150 py-1.5 z-50 animate-in fade-in zoom-in-95 duration-150 text-left">
-                    {/* User info snippet if logged in */}
                     {currentUser && (
                       <div className="px-3 py-1.5 border-b border-gray-100 mb-1">
                         <p className="text-[11px] font-bold text-gray-800 truncate">
@@ -1633,7 +1617,6 @@ export default function App() {
                       </div>
                     )}
 
-                    {/* 1. Settings option */}
                     <button
                       id="menu-option-settings"
                       onClick={() => {
@@ -1646,7 +1629,6 @@ export default function App() {
                       <span>Settings</span>
                     </button>
 
-                    {/* 2. Guide option */}
                     <button
                       id="menu-option-guide"
                       onClick={() => {
@@ -1659,7 +1641,6 @@ export default function App() {
                       <span>Guide</span>
                     </button>
 
-                    {/* 3. Logout / Sign in option */}
                     {currentUser ? (
                       <button
                         id="menu-option-logout"
@@ -1710,8 +1691,6 @@ export default function App() {
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 text-xs text-gray-600 leading-relaxed">
-              
-              {/* Box 1 */}
               <div className="space-y-2 bg-slate-50/50 p-4 rounded-xl border border-slate-100">
                 <div className="font-bold text-slate-800 text-sm flex items-center gap-1.5">
                   <span className="w-5 h-5 rounded-md bg-indigo-100 text-indigo-700 flex items-center justify-center text-[11px] font-mono">1</span>
@@ -1721,12 +1700,11 @@ export default function App() {
                   Think of this as your <strong>financial diary</strong>. Every time the Union receives or spends money, you write it down here.
                 </p>
                 <div className="mt-2 pt-2 border-t border-slate-200/60 space-y-1 text-[11px]">
-                  <p>• <strong className="text-indigo-600">Debit (Dr):</strong> Where the money is going <strong>TO</strong> (e.g., your Bank account or buying laptops).</p>
-                  <p>• <strong className="text-emerald-600">Credit (Cr):</strong> Where the money came <strong>FROM</strong> (e.g., student dues or donations).</p>
+                  <p>• <strong className="text-indigo-600">Debit (Dr):</strong> Where the money is going <strong>TO</strong>.</p>
+                  <p>• <strong className="text-emerald-600">Credit (Cr):</strong> Where the money came <strong>FROM</strong>.</p>
                 </div>
               </div>
 
-              {/* Box 2 */}
               <div className="space-y-2 bg-slate-50/50 p-4 rounded-xl border border-slate-100">
                 <div className="font-bold text-slate-800 text-sm flex items-center gap-1.5">
                   <span className="w-5 h-5 rounded-md bg-indigo-100 text-indigo-700 flex items-center justify-center text-[11px] font-mono">2</span>
@@ -1742,7 +1720,6 @@ export default function App() {
                 </div>
               </div>
 
-              {/* Box 3 */}
               <div className="space-y-2 bg-slate-50/50 p-4 rounded-xl border border-slate-100">
                 <div className="font-bold text-slate-800 text-sm flex items-center gap-1.5">
                   <span className="w-5 h-5 rounded-md bg-indigo-100 text-indigo-700 flex items-center justify-center text-[11px] font-mono">3</span>
@@ -1758,7 +1735,6 @@ export default function App() {
                 </div>
               </div>
 
-              {/* Box 4 */}
               <div className="space-y-2 bg-slate-50/50 p-4 rounded-xl border border-slate-100">
                 <div className="font-bold text-slate-800 text-sm flex items-center gap-1.5">
                   <span className="w-5 h-5 rounded-md bg-indigo-100 text-indigo-700 flex items-center justify-center text-[11px] font-mono">4</span>
@@ -1773,12 +1749,9 @@ export default function App() {
                   <p>• If the final difference is exactly <strong>zero</strong>, your book records are 100% flawless!</p>
                 </div>
               </div>
-
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 text-xs text-gray-600 leading-relaxed pt-2">
-
-              {/* Box 5 */}
               <div className="space-y-2 bg-slate-50/50 p-4 rounded-xl border border-slate-100">
                 <div className="font-bold text-slate-800 text-sm flex items-center gap-1.5">
                   <span className="w-5 h-5 rounded-md bg-indigo-100 text-indigo-700 flex items-center justify-center text-[11px] font-mono">5</span>
@@ -1794,7 +1767,6 @@ export default function App() {
                 </div>
               </div>
 
-              {/* Box 6 */}
               <div className="space-y-2 bg-slate-50/50 p-4 rounded-xl border border-slate-100">
                 <div className="font-bold text-slate-800 text-sm flex items-center gap-1.5">
                   <span className="w-5 h-5 rounded-md bg-indigo-100 text-indigo-700 flex items-center justify-center text-[11px] font-mono">6</span>
@@ -1810,7 +1782,6 @@ export default function App() {
                 </div>
               </div>
 
-              {/* Box 7 */}
               <div className="space-y-2 bg-slate-50/50 p-4 rounded-xl border border-slate-100">
                 <div className="font-bold text-slate-800 text-sm flex items-center gap-1.5">
                   <span className="w-5 h-5 rounded-md bg-indigo-100 text-indigo-700 flex items-center justify-center text-[11px] font-mono">7</span>
@@ -1826,14 +1797,13 @@ export default function App() {
                 </div>
               </div>
 
-              {/* Box 8 */}
               <div className="space-y-2 bg-slate-50/50 p-4 rounded-xl border border-slate-100">
                 <div className="font-bold text-slate-800 text-sm flex items-center gap-1.5">
                   <span className="w-5 h-5 rounded-md bg-indigo-100 text-indigo-700 flex items-center justify-center text-[11px] font-mono">8</span>
                   Visual Performance
                 </div>
                 <p className="text-[11px]">
-                  Turns boring, dry tables and math into <strong>easy-to-read charts</strong>.
+                  Turns boring tables and math into <strong>easy-to-read charts</strong>.
                 </p>
                 <div className="mt-2 pt-2 border-t border-slate-200/60 space-y-1 text-[11px]">
                   <p>• Doughnut Charts show your exact expense percentages.</p>
@@ -1841,7 +1811,6 @@ export default function App() {
                   <p>• Easily identify outliers and plan future budgets.</p>
                 </div>
               </div>
-
             </div>
 
             <div className="flex items-center justify-between border-t border-gray-100 pt-4">
@@ -1858,7 +1827,7 @@ export default function App() {
           </div>
         )}
 
-        {/* Dashboard Cards summary section (shown on ledger tabs; hidden on Home, Profile, Templates, Settings, and Privacy dedicated pages) */}
+        {/* Dashboard Cards summary section */}
         {accounts.length > 0 && activeTab !== 'home' && activeTab !== 'profile' && activeTab !== 'templates' && activeTab !== 'settings' && activeTab !== 'privacy' && (
           <DashboardCards 
             accounts={accounts} 
@@ -1868,11 +1837,11 @@ export default function App() {
           />
         )}
 
-        {/* Tabs navigation list (Desktop View Only - hidden on dedicated pages: profile, templates, settings, privacy) */}
+        {/* Tabs navigation list */}
         {activeTab !== 'profile' && activeTab !== 'templates' && activeTab !== 'settings' && activeTab !== 'privacy' && (
           <div className="hidden md:flex bg-white border border-gray-200 rounded-xl p-1.5 overflow-x-auto gap-1 shadow-3xs sticky top-16 sm:top-20 z-30 whitespace-nowrap [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden scroll-smooth">
             {[
-              { id: 'home', label: 'Home', icon: Home, Menu, color: 'text-indigo-600' },
+              { id: 'home', label: 'Home', icon: Home, color: 'text-indigo-600' },
               { id: 'journal', label: 'Journal Spreadsheet', icon: FileText, color: 'text-indigo-600' },
               { id: 'ledgers', label: 'General Ledger', icon: BookOpen, color: 'text-blue-600' },
               { id: 'trial', label: 'Trial Balance', icon: Wallet, color: 'text-orange-500' },
@@ -2106,7 +2075,7 @@ export default function App() {
         </div>
       </footer>
 
-      {/* Floating Gemini AI Chartered Accountant Chatbot */}
+      {/* Floating Gemini AI Assistant */}
       <AIChatBot
         accounts={accounts}
         entries={entries}
@@ -2161,14 +2130,14 @@ export default function App() {
         </div>
       )}
 
-      {/* Elegant Native Toast Notifications for a pristine iframe-safe UX */}
+      {/* Toast Notifications */}
       {toast && (
         <div 
           className={`fixed bottom-20 sm:bottom-5 left-3 right-3 sm:left-auto sm:right-5 z-[100] flex items-center gap-3 px-4 py-3 rounded-xl border shadow-lg sm:max-w-sm backdrop-blur-md transition-all duration-300 animate-in fade-in slide-in-from-bottom-5 ${
             toast.type === 'success' 
               ? 'bg-emerald-550 border-emerald-200 bg-emerald-50 text-emerald-800' 
-              : toast.type === 'err'
-                ? 'bg-rose-50 border-rose-200 text-rose-800'
+              : toast.type === 'err' 
+                ? 'bg-rose-50 border-rose-200 text-rose-800' 
                 : 'bg-indigo-50 border-indigo-200 text-indigo-800'
           }`}
         >
@@ -2190,12 +2159,11 @@ export default function App() {
         </div>
       )}
 
-      {/* 📱 Premium Mobile Bottom Navigation Bar */}
+      {/* Mobile Bottom Navigation Bar */}
       <div 
         className="md:hidden fixed bottom-0 left-0 right-0 bg-white/95 backdrop-blur-md border-t border-slate-200/90 z-50 px-2 py-1 flex items-center justify-around shadow-[0_-4px_20px_rgba(0,0,0,0.06)]"
         style={{ paddingBottom: 'max(env(safe-area-inset-bottom), 6px)' }}
       >
-        {/* 1. Home */}
         <button
           onClick={() => {
             setActiveTab('home');
@@ -2210,7 +2178,6 @@ export default function App() {
           {activeTab === 'home' && <span className="w-3.5 h-1 bg-purple-600 rounded-full mt-0.5" />}
         </button>
 
-        {/* 2. Journal */}
         <button
           onClick={() => {
             setActiveTab('journal');
@@ -2225,7 +2192,6 @@ export default function App() {
           {activeTab === 'journal' && <span className="w-3.5 h-1 bg-purple-600 rounded-full mt-0.5" />}
         </button>
 
-        {/* 3. Ledgers */}
         <button
           onClick={() => {
             setActiveTab('ledgers');
@@ -2240,7 +2206,6 @@ export default function App() {
           {activeTab === 'ledgers' && <span className="w-3.5 h-1 bg-purple-600 rounded-full mt-0.5" />}
         </button>
 
-        {/* 4. Student Dues */}
         <button
           onClick={() => {
             setActiveTab('dues');
@@ -2255,7 +2220,6 @@ export default function App() {
           {activeTab === 'dues' && <span className="w-3.5 h-1 bg-purple-600 rounded-full mt-0.5" />}
         </button>
 
-        {/* 5. Statements */}
         <button
           onClick={() => setIsReportsMobileMenuOpen(true)}
           className={`flex-1 flex flex-col items-center justify-center py-1 rounded-xl transition-all cursor-pointer ${
@@ -2270,7 +2234,7 @@ export default function App() {
         </button>
       </div>
 
-      {/* 📊 Premium Mobile Sheets & Reports Choice Bottom Overlay Menu */}
+      {/* Reports Mobile Overlay */}
       {isReportsMobileMenuOpen && (
         <div className="md:hidden fixed inset-0 z-[150] bg-slate-900/40 backdrop-blur-xs flex items-end animate-in fade-in duration-200">
           <div 
@@ -2284,7 +2248,7 @@ export default function App() {
               </div>
               <button
                 onClick={() => setIsReportsMobileMenuOpen(false)}
-                className="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-505 flex items-center justify-center cursor-pointer"
+                className="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 flex items-center justify-center cursor-pointer"
               >
                 <X size={15} />
               </button>
@@ -2352,7 +2316,25 @@ export default function App() {
 
             <div className="flex-1 overflow-y-auto p-3 space-y-2.5">
 
-              {/* Button 1: Profile (Opens dedicated Profile page) */}
+              {/* Direct Link to Google Gemini in the SAME TAB (Breaks out of iframe via target="_top") */}
+              <div className="border border-indigo-200 rounded-xl overflow-hidden bg-white shadow-3xs transition-all">
+                <a
+                  href="https://gemini.google.com"
+                  target="_top"
+                  className="w-full flex items-center justify-between p-3.5 text-left cursor-pointer transition-colors group bg-indigo-50/60 hover:bg-indigo-100/60 text-indigo-950"
+                  title="Open official Google Gemini in this tab"
+                >
+                  <div className="flex items-center gap-2.5 font-bold text-xs">
+                    <Sparkles size={16} className="text-indigo-600 animate-pulse" />
+                    <span>Open Google Gemini</span>
+                  </div>
+                  <span className="text-[10px] font-semibold text-indigo-600 bg-white px-2 py-0.5 rounded-md border border-indigo-100">
+                    Go ➔
+                  </span>
+                </a>
+              </div>
+
+              {/* Button 1: Profile */}
               <div className="border border-slate-200 rounded-xl overflow-hidden bg-white shadow-3xs transition-all">
                 <button
                   type="button"
@@ -2383,10 +2365,11 @@ export default function App() {
                 </button>
               </div>
 
-              {/* Button 2: Quick Templates (Opens dedicated Quick Templates page) */}
+              {/* Button 2: Quick Templates */}
               <div className="border border-slate-200 rounded-xl overflow-hidden bg-white shadow-3xs transition-all">
                 <button
                   type="button"
+                  id="quick-templates-sidebar-button"
                   onClick={() => {
                     setActiveTab('templates');
                     setIsAppSidebarOpen(false);
@@ -2413,7 +2396,7 @@ export default function App() {
                 </button>
               </div>
 
-              {/* Button 3: Privacy & Security (Opens dedicated Privacy & Security page) */}
+              {/* Button 3: Privacy & Security */}
               <div className="border border-slate-200 rounded-xl overflow-hidden bg-white shadow-3xs transition-all">
                 <button
                   type="button"
