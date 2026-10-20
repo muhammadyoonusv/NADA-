@@ -38,7 +38,8 @@ import {
   RefreshCw,
   Sliders,
   ChevronRight,
-  Info
+  Info,
+  ArrowUpDown
 } from 'lucide-react';
 
 interface StudentDuesViewProps {
@@ -47,6 +48,8 @@ interface StudentDuesViewProps {
   students: Student[];
   programs: Program[];
   isEditor: boolean;
+  academicYear: string;
+  setAcademicYear: (year: string) => void;
   showToast?: (message: string, type?: 'success' | 'err' | 'info') => void;
   onAddStudent: (student: Student) => Promise<boolean>;
   onUpdateStudent: (student: Student) => Promise<boolean>;
@@ -58,14 +61,41 @@ interface StudentDuesViewProps {
   onDeleteProgram: (id: string) => Promise<boolean>;
 }
 
+// Helper to extract student's true roll number (1..N). Fixes legacy +100 offsets where Roll 1 was generated as 101.
+export function getStudentRollNumber(idOrStudent: string | { id: string } | undefined | null): number {
+  if (!idOrStudent) return 0;
+  const rawId = typeof idOrStudent === 'string' ? idOrStudent : idOrStudent.id;
+  const match = rawId.match(/(\d+)/);
+  if (!match) return 0;
+  let num = parseInt(match[1], 10);
+  if (num > 100 && num <= 199) {
+    num = num - 100;
+  }
+  return num;
+}
+
+export function formatStudentRoll(idOrStudent: string | { id: string } | undefined | null): string {
+  const num = getStudentRollNumber(idOrStudent);
+  if (num > 0) return `ROLL-${num}`;
+  if (typeof idOrStudent === 'string') return idOrStudent;
+  return idOrStudent?.id || '';
+}
+
+export function formatStudentRollDisplay(idOrStudent: string | { id: string } | undefined | null, fallbackIdx?: number): string {
+  const num = getStudentRollNumber(idOrStudent);
+  if (num > 0) return `${num}`;
+  if (fallbackIdx !== undefined) return `${fallbackIdx + 1}`;
+  return '';
+}
+
 const DEFAULT_CLASS_MEMBERS = [
-  "Aditya K. S.", "Aiswarya Lakshmi", "Albin Joseph", "Amal Krishna", "Anagha S. Kumar",
-  "Anandhu Rajesh", "Anjali Nair", "Arjun Prasad", "Aswin Ramesh", "Athira Chandran",
-  "Devika Nair", "Gautham Krishna", "Hariprasad V.", "Kiran Thomas", "Meenakshi R.",
-  "Midhun Mohan", "Nandana S.", "Nihal Ahmed", "Pranav K.", "Rahul Krishnan",
-  "Rhea Kurian", "Rohan Mathew", "Sandeep Nair", "Siddharth K.", "Sneha Raj",
-  "Surya Kiran", "Varun Dev", "Zainab Fatima", "Afsal Hussain", "Abhishek Pillai",
-  "Sandra Rose", "Thejus Nair", "Rithika S.", "Fadil Rahman", "Mohammed Shafi"
+  "Abhishek Pillai", "Aditya K. S.", "Afsal Hussain", "Aiswarya Lakshmi", "Albin Joseph",
+  "Amal Krishna", "Anagha S. Kumar", "Anandhu Rajesh", "Anjali Nair", "Arjun Prasad",
+  "Aswin Ramesh", "Athira Chandran", "Devika Nair", "Fadil Rahman", "Gautham Krishna",
+  "Hariprasad V.", "Kiran Thomas", "Meenakshi R.", "Midhun Mohan", "Mohammed Shafi",
+  "Nandana S.", "Nihal Ahmed", "Pranav K.", "Rahul Krishnan", "Rhea Kurian",
+  "Rithika S.", "Rohan Mathew", "Sandeep Nair", "Sandra Rose", "Siddharth K.",
+  "Sneha Raj", "Surya Kiran", "Thejus Nair", "Varun Dev", "Zainab Fatima"
 ];
 
 export function StudentDuesView({
@@ -74,6 +104,8 @@ export function StudentDuesView({
   students,
   programs = [],
   isEditor,
+  academicYear,
+  setAcademicYear,
   showToast,
   onAddStudent,
   onUpdateStudent,
@@ -91,7 +123,7 @@ export function StudentDuesView({
   // Search & Filter state
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<'All' | 'Paid' | 'Partial' | 'Pending'>('All');
-  const [sortBy, setSortBy] = useState<'name' | 'id' | 'paid' | 'remaining'>('id');
+  const [sortBy, setSortBy] = useState<'name' | 'id' | 'paid' | 'remaining'>('name');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
 
   // Modals state
@@ -177,6 +209,7 @@ export function StudentDuesView({
   // Bulk Student Creation input
   const [bulkStudentInput, setBulkStudentInput] = useState('');
   const [isBulkStudentImporting, setIsBulkStudentImporting] = useState(false);
+  const [isRenumberingRolls, setIsRenumberingRolls] = useState(false);
 
   // Bulk and Excluded members management states
   const [selectedStudentIds, setSelectedStudentIds] = useState<string[]>([]);
@@ -194,8 +227,11 @@ export function StudentDuesView({
 
   // Master list of enrolled class members
   const classStudentsList = useMemo(() => {
+    // Filter by academicYear
+    const filteredByYear = students.filter(s => !s.academicYear || s.academicYear === academicYear);
+
     // Sanitize any legacy student data to guarantee no Quran/Quran Department data remains
-    const sanitized = students.map(stu => {
+    const sanitized = filteredByYear.map(stu => {
       let newClassName = stu.className;
       let newRemarks = stu.remarks;
 
@@ -213,20 +249,21 @@ export function StudentDuesView({
       };
     });
 
-    // Standardize order - arrange in ascending order of roll number / ID
+    // Standardize order - arrange in alphabetical order (A to Z) by student name
     return [...sanitized].sort((a, b) => {
-      const numA = parseInt(a.id.replace(/\D/g, ''), 10);
-      const numB = parseInt(b.id.replace(/\D/g, ''), 10);
-      if (!isNaN(numA) && !isNaN(numB)) {
-        if (numA !== numB) return numA - numB;
-      }
-      return a.id.localeCompare(b.id, undefined, { numeric: true });
+      const cmp = a.name.trim().localeCompare(b.name.trim(), undefined, { sensitivity: 'base' });
+      if (cmp !== 0) return cmp;
+      const numA = getStudentRollNumber(a);
+      const numB = getStudentRollNumber(b);
+      return numA - numB;
     });
   }, [students]);
 
-  // Silently clean any legacy Quran data in Firestore for class members if authorized
+  // Silently clean any legacy Quran data and normalize roll numbers > 100 in Firestore
   useEffect(() => {
     if (!isEditor) return;
+
+    // 1. Clean Quran text
     const studentsToClean = students.filter(s => 
       (s.className && /quran/i.test(s.className)) || 
       (s.remarks && /quran/i.test(s.remarks))
@@ -247,7 +284,68 @@ export function StudentDuesView({
         }
       });
     }
-  }, [students, isEditor, onUpdateStudent]);
+
+    // 2. Migrate any legacy roll numbers with +100 offset (e.g. ROLL-101..135 -> ROLL-1..35)
+    const studentsToMigrateRoll = students.filter(s => {
+      const match = s.id.match(/^(?:ROLL-|QURAN-)?(1\d{2})$/i);
+      if (match) {
+        const val = parseInt(match[1], 10);
+        return val > 100 && val <= 199;
+      }
+      return false;
+    });
+
+    if (studentsToMigrateRoll.length > 0) {
+      studentsToMigrateRoll.forEach(async (stu) => {
+        try {
+          const oldId = stu.id;
+          const trueNum = getStudentRollNumber(oldId);
+          const newId = `ROLL-${trueNum}`;
+
+          if (students.some(other => other.id === newId && other.id !== oldId)) {
+            return;
+          }
+
+          // Create clean student
+          await onAddStudent({
+            ...stu,
+            id: newId
+          });
+
+          // Sync program dues mappings
+          programs.forEach(async (prog) => {
+            let updated = false;
+            const updatedDues = { ...prog.studentDues };
+            let updatedExcluded = prog.excludedStudentIds ? [...prog.excludedStudentIds] : [];
+
+            if (updatedDues[oldId]) {
+              updatedDues[newId] = updatedDues[oldId];
+              delete updatedDues[oldId];
+              updated = true;
+            }
+
+            if (updatedExcluded.includes(oldId)) {
+              updatedExcluded = updatedExcluded.map(x => x === oldId ? newId : x);
+              updated = true;
+            }
+
+            if (updated) {
+              await onUpdateProgram({
+                ...prog,
+                studentDues: updatedDues,
+                excludedStudentIds: updatedExcluded
+              });
+            }
+          });
+
+          // Delete legacy doc
+          await onDeleteStudent(oldId);
+        } catch (err) {
+          console.error("Auto-migrating student roll number:", err);
+        }
+      });
+    }
+  }, [students, programs, isEditor, onAddStudent, onUpdateStudent, onDeleteStudent, onUpdateProgram]);
 
   // Accounts classifications
   const assetAccounts = useMemo(() => accounts.filter(a => a.type === 'Asset'), [accounts]);
@@ -389,10 +487,33 @@ export function StudentDuesView({
   // Filter & Sort table items
   const filteredRows = useMemo(() => {
     if (activeView === 'roster') {
-      return classStudentsList.filter(s => {
+      const list = classStudentsList.filter(s => {
         const matchSearch = s.name.toLowerCase().includes(searchTerm.toLowerCase()) || s.id.toLowerCase().includes(searchTerm.toLowerCase());
         const matchStatus = statusFilter === 'All' || s.status === statusFilter;
         return matchSearch && matchStatus;
+      });
+
+      return list.sort((a, b) => {
+        let valA: any = a.name;
+        let valB: any = b.name;
+
+        if (sortBy === 'id') {
+          const numA = getStudentRollNumber(a);
+          const numB = getStudentRollNumber(b);
+          if (numA > 0 && numB > 0 && numA !== numB) {
+            return sortOrder === 'asc' ? numA - numB : numB - numA;
+          }
+          valA = a.id;
+          valB = b.id;
+        }
+
+        if (typeof valA === 'string' && typeof valB === 'string') {
+          return sortOrder === 'asc'
+            ? valA.trim().localeCompare(valB.trim(), undefined, { sensitivity: 'base' })
+            : valB.trim().localeCompare(valA.trim(), undefined, { sensitivity: 'base' });
+        } else {
+          return sortOrder === 'asc' ? (valA || 0) - (valB || 0) : (valB || 0) - (valA || 0);
+        }
       });
     }
 
@@ -412,6 +533,11 @@ export function StudentDuesView({
         let valB: any = b.student.name;
 
         if (sortBy === 'id') {
+          const numA = getStudentRollNumber(a.student);
+          const numB = getStudentRollNumber(b.student);
+          if (numA > 0 && numB > 0 && numA !== numB) {
+            return sortOrder === 'asc' ? numA - numB : numB - numA;
+          }
           valA = a.student.id;
           valB = b.student.id;
         } else if (sortBy === 'paid') {
@@ -423,7 +549,9 @@ export function StudentDuesView({
         }
 
         if (typeof valA === 'string' && typeof valB === 'string') {
-          return sortOrder === 'asc' ? valA.localeCompare(valB) : valB.localeCompare(valA);
+          return sortOrder === 'asc'
+            ? valA.trim().localeCompare(valB.trim(), undefined, { sensitivity: 'base' })
+            : valB.trim().localeCompare(valA.trim(), undefined, { sensitivity: 'base' });
         } else {
           return sortOrder === 'asc' ? (valA || 0) - (valB || 0) : (valB || 0) - (valA || 0);
         }
@@ -454,7 +582,8 @@ export function StudentDuesView({
     
     // Find name
     const sName = classStudentsList.find(s => s.id === stuId)?.name || 'Student';
-    setPayRemarks(`${activeProgram.name} drive payment from ${sName} (${stuId})`);
+    const rollStr = formatStudentRoll(stuId);
+    setPayRemarks(`${activeProgram.name} drive payment from ${sName} (${rollStr})`);
   };
 
   // Create standard class students automatically
@@ -464,7 +593,7 @@ export function StudentDuesView({
     try {
       for (let i = 0; i < DEFAULT_CLASS_MEMBERS.length; i++) {
         const studentName = DEFAULT_CLASS_MEMBERS[i];
-        const studentRoll = `ROLL-${101 + i}`;
+        const studentRoll = `ROLL-${i + 1}`;
         
         // Skip duplicate IDs
         if (students.some(s => s.id === studentRoll)) continue;
@@ -503,13 +632,10 @@ export function StudentDuesView({
 
     try {
       const lines = bulkStudentInput.split('\n');
-      let currentMaxNum = 100;
+      let currentMaxNum = 0;
       students.forEach(s => {
-        const match = s.id.match(/^ROLL-(\d+)$/i) || s.id.match(/^QURAN-(\d+)$/i) || s.id.match(/^(\d+)$/i);
-        if (match) {
-          const num = parseInt(match[1]);
-          if (num > currentMaxNum) currentMaxNum = num;
-        }
+        const rollNum = getStudentRollNumber(s);
+        if (rollNum > currentMaxNum && rollNum < 100) currentMaxNum = rollNum;
       });
 
       for (let i = 0; i < lines.length; i++) {
@@ -536,7 +662,7 @@ export function StudentDuesView({
           const p1 = parts[1].trim();
 
           // Check if p0 feels like an alphanumeric ID/Roll (no space, optional letters, trailing numbers)
-          const isIdLike = /^[A-Z0-9-]{3,15}$/i.test(p0) || (p0.length <= 12 && isNaN(Number(p0)) && !p0.includes(' '));
+          const isIdLike = /^[A-Z0-9-]{1,15}$/i.test(p0) || (p0.length <= 12 && isNaN(Number(p0)) && !p0.includes(' '));
           
           if (isIdLike) {
             id = p0;
@@ -559,6 +685,12 @@ export function StudentDuesView({
         if (!id) {
           currentMaxNum++;
           id = `ROLL-${currentMaxNum}`;
+        } else {
+          // Normalize legacy roll numbers if > 100
+          const parsedRoll = getStudentRollNumber(id);
+          if (parsedRoll > 0 && parsedRoll <= 60) {
+            id = `ROLL-${parsedRoll}`;
+          }
         }
 
         // De-duplicate Roll IDs on the fly
@@ -637,6 +769,120 @@ export function StudentDuesView({
       }
     } finally {
       setIsBulkStudentImporting(false);
+    }
+  };
+
+  // Reassign roll numbers 1..N sequentially matching the alphabetical (A-Z) order
+  const handleRenumberRollsAlphabetically = async () => {
+    if (classStudentsList.length === 0) {
+      if (showToast) showToast("No students enrolled to renumber.", "info");
+      return;
+    }
+
+    const confirmed = window.confirm(
+      `Reassign Roll Numbers 1 to ${classStudentsList.length} in alphabetical order (A to Z)?\n\n` +
+      `This will set Roll 1 for "${classStudentsList[0].name}", Roll 2 for the next student, and so forth, safely preserving all payment records.`
+    );
+    if (!confirmed) return;
+
+    setIsRenumberingRolls(true);
+    try {
+      // classStudentsList is already sorted alphabetically A-Z
+      const alphaList = [...classStudentsList];
+
+      // Temporary map to prevent collisions during swapping (e.g. ROLL-1 and ROLL-2)
+      const timestamp = Date.now();
+      const plan = alphaList.map((student, idx) => ({
+        student,
+        oldId: student.id,
+        tempId: `TEMP_${timestamp}_${idx + 1}`,
+        finalId: `ROLL-${idx + 1}`
+      }));
+
+      // Phase 1: Migrate changed records to temporary IDs
+      for (const item of plan) {
+        if (item.oldId === item.finalId) continue;
+        await onAddStudent({
+          ...item.student,
+          id: item.tempId
+        });
+        await onDeleteStudent(item.oldId);
+      }
+
+      // Sync program dues mappings to temp IDs
+      for (const prog of programs) {
+        let changed = false;
+        const newDues = { ...prog.studentDues };
+        let newExcluded = prog.excludedStudentIds ? [...prog.excludedStudentIds] : [];
+
+        for (const item of plan) {
+          if (item.oldId === item.finalId) continue;
+          if (newDues[item.oldId]) {
+            newDues[item.tempId] = newDues[item.oldId];
+            delete newDues[item.oldId];
+            changed = true;
+          }
+          if (newExcluded.includes(item.oldId)) {
+            newExcluded = newExcluded.map(x => x === item.oldId ? item.tempId : x);
+            changed = true;
+          }
+        }
+        if (changed) {
+          await onUpdateProgram({
+            ...prog,
+            studentDues: newDues,
+            excludedStudentIds: newExcluded
+          });
+        }
+      }
+
+      // Phase 2: Migrate from temp IDs to final IDs
+      for (const item of plan) {
+        if (item.oldId === item.finalId) continue;
+        await onAddStudent({
+          ...item.student,
+          id: item.finalId
+        });
+        await onDeleteStudent(item.tempId);
+      }
+
+      // Sync program dues mappings from temp IDs to final IDs
+      for (const prog of programs) {
+        let changed = false;
+        const newDues = { ...prog.studentDues };
+        let newExcluded = prog.excludedStudentIds ? [...prog.excludedStudentIds] : [];
+
+        for (const item of plan) {
+          if (item.oldId === item.finalId) continue;
+          if (newDues[item.tempId]) {
+            newDues[item.finalId] = newDues[item.tempId];
+            delete newDues[item.tempId];
+            changed = true;
+          }
+          if (newExcluded.includes(item.tempId)) {
+            newExcluded = newExcluded.map(x => x === item.tempId ? item.finalId : x);
+            changed = true;
+          }
+        }
+        if (changed) {
+          await onUpdateProgram({
+            ...prog,
+            studentDues: newDues,
+            excludedStudentIds: newExcluded
+          });
+        }
+      }
+
+      if (showToast) {
+        showToast(`Reassigned roll numbers 1 to ${alphaList.length} in alphabetical order successfully!`, "success");
+      }
+    } catch (err) {
+      console.error("Error renumbering rolls:", err);
+      if (showToast) {
+        showToast("Error occurred while renumbering roll numbers.", "err");
+      }
+    } finally {
+      setIsRenumberingRolls(false);
     }
   };
 
@@ -926,7 +1172,10 @@ export function StudentDuesView({
     // 1. Post double-entry journals synchronously as a single aggregated bulk amount
     if (bulkPostJournal && entriesToPost.length > 0) {
       const totalBulkAmount = entriesToPost.reduce((sum, item) => sum + item.amount, 0);
-      const studentDetails = entriesToPost.map(item => `${item.studentName} (${item.studentId}): ₹${item.amount}`).join(', ');
+      const studentDetails = entriesToPost.map(item => {
+        const cleanId = formatStudentRoll(item.studentId);
+        return `${item.studentName} (${cleanId}): ₹${item.amount}`;
+      }).join(', ');
       const rawNarration = `Bulk Drive Collection for ${activeProgram.name} (${entriesToPost.length} students): ${studentDetails}`;
       const finalNarration = rawNarration.length > 450 ? rawNarration.slice(0, 447) + '...' : rawNarration;
 
@@ -1193,7 +1442,7 @@ export function StudentDuesView({
   // Open edit master student
   const handleOpenEditMaster = (stu: Student) => {
     setEditingStudent(stu);
-    setStudentId(stu.id);
+    setStudentId(formatStudentRoll(stu.id));
     setStudentName(stu.name);
     setStudentClass(stu.className && !/quran/i.test(stu.className) ? stu.className : 'Class Member');
     setStudentRemarks(stu.remarks && /quran/i.test(stu.remarks) ? stu.remarks.replace(/quran\s*(department)?\s*(active\s*roster)?/gi, 'Class Member').trim() : (stu.remarks || ''));
@@ -1240,6 +1489,14 @@ export function StudentDuesView({
 
         {/* Global Toolbar and Folder Buttons - Only visible to editors */}
         <div className="grid grid-cols-2 gap-2 w-full md:flex md:flex-wrap md:items-center md:gap-2 md:w-auto">
+          <select
+            value={academicYear}
+            onChange={(e) => setAcademicYear(e.target.value)}
+            className="p-2 border border-gray-200 rounded-xl text-xs font-bold text-slate-700 bg-white"
+          >
+            <option value="2025-2026">2025-2026</option>
+            <option value="2026-2027">2026-2027</option>
+          </select>
           {isEditor && activeView !== 'folders' && (
             <button
               onClick={() => {
@@ -1271,9 +1528,14 @@ export function StudentDuesView({
             <button
               onClick={() => {
                 setEditingStudent(null);
-                setStudentId(`ROLL-${101 + classStudentsList.length}`);
+                const usedNums = classStudentsList.map(s => getStudentRollNumber(s)).filter(n => n > 0);
+                let nextRoll = 1;
+                while (usedNums.includes(nextRoll)) {
+                  nextRoll++;
+                }
+                setStudentId(`ROLL-${nextRoll}`);
                 setStudentName('');
-                setStudentClass('CLASS UNION');
+                setStudentClass('Class Member');
                 setStudentRemarks('');
                 setIsAddStudentOpen(true);
               }}
@@ -1472,10 +1734,20 @@ export function StudentDuesView({
               </p>
             </div>
             {isEditor && (
-              <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  onClick={handleRenumberRollsAlphabetically}
+                  disabled={isRenumberingRolls || classStudentsList.length === 0}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 text-xs font-bold rounded-lg cursor-pointer shadow-xs hover:shadow-sm transition-colors disabled:opacity-50"
+                  title="Assign Roll 1 to N based on alphabetical sequence A to Z"
+                >
+                  <ArrowUpDown size={12} className={isRenumberingRolls ? "animate-spin" : ""} />
+                  {isRenumberingRolls ? "Renumbering..." : "Renumber Rolls (A→Z)"}
+                </button>
                 <button
                   onClick={handleClearAllStudents}
-                  disabled={isBulkStudentImporting}
+                  disabled={isBulkStudentImporting || isRenumberingRolls}
                   className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-rose-50 border border-rose-200 text-rose-700 hover:bg-rose-100 text-xs font-bold rounded-lg cursor-pointer shadow-xs hover:shadow-sm transition-colors disabled:opacity-50"
                 >
                   <Trash2 size={12} />
@@ -1500,7 +1772,7 @@ export function StudentDuesView({
             )}
           </div>
 
-          {/* Roster Controls Search */}
+          {/* Roster Controls Search & Sorting summary */}
           <div className="bg-white p-4 border border-gray-200 rounded-2xl flex flex-col md:flex-row justify-between items-center gap-3">
             <div className="relative w-full md:max-w-md">
               <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
@@ -1512,9 +1784,14 @@ export function StudentDuesView({
                 className="w-full pl-9 pr-4 py-2 border border-gray-200 rounded-xl text-xs text-slate-800 placeholder-gray-400 bg-gray-50 focus:bg-white outline-none focus:ring-1 focus:ring-indigo-400"
               />
             </div>
-            <span className="text-xs font-mono font-bold text-slate-400">
-              Showing {filteredRows.length} of {classStudentsList.length} roster profiles
-            </span>
+            <div className="flex items-center gap-2">
+              <span className="text-[11px] font-mono px-2 py-1 bg-slate-100 border border-slate-200 text-slate-600 rounded-md font-semibold">
+                Order: {sortBy === 'name' ? 'Alphabetical (A→Z)' : 'Roll Number'}
+              </span>
+              <span className="text-xs font-mono font-bold text-slate-400">
+                Showing {filteredRows.length} of {classStudentsList.length} profiles
+              </span>
+            </div>
           </div>
 
           {/* Roster Table (Desktop View) */}
@@ -1522,8 +1799,16 @@ export function StudentDuesView({
             <table className="w-full text-left text-xs">
               <thead>
                 <tr className="bg-slate-50 border-b border-gray-200 font-mono text-[10px] text-slate-505 font-bold uppercase">
-                  <th className="p-4">Sl No</th>
-                  <th className="p-4">Student Name</th>
+                  <th className="p-4 cursor-pointer hover:bg-slate-100 select-none transition-colors" onClick={() => requestSort('id')} title="Click to sort by Roll Number">
+                    <span className="inline-flex items-center gap-1">
+                      Roll No {sortBy === 'id' && (sortOrder === 'asc' ? '↑' : '↓')}
+                    </span>
+                  </th>
+                  <th className="p-4 cursor-pointer hover:bg-slate-100 select-none transition-colors" onClick={() => requestSort('name')} title="Click to sort alphabetically by Name">
+                    <span className="inline-flex items-center gap-1">
+                      Student Name (A-Z) {sortBy === 'name' && (sortOrder === 'asc' ? '↑' : '↓')}
+                    </span>
+                  </th>
                   <th className="p-4">Particular Notes</th>
                   {isEditor && <th className="p-4 text-right">Actions</th>}
                 </tr>
@@ -1539,7 +1824,7 @@ export function StudentDuesView({
                 ) : (
                   filteredRows.map((stu, idx) => (
                     <tr key={stu.id} className="hover:bg-slate-50/50 leading-relaxed font-medium text-slate-600">
-                      <td className="p-4 font-bold font-mono text-slate-900">{idx + 1}</td>
+                      <td className="p-4 font-bold font-mono text-slate-900">{formatStudentRollDisplay(stu, idx)}</td>
                       <td className="p-4 text-slate-900 font-semibold">{stu.name}</td>
                       <td className="p-4 text-slate-400 text-[11px]">{stu.remarks || <span className="italic text-gray-200">No remarks</span>}</td>
                       {isEditor && (
@@ -1583,7 +1868,7 @@ export function StudentDuesView({
                 <div key={stu.id} className="bg-white border border-gray-200 p-4 rounded-xl space-y-3 shadow-3xs">
                   <div className="flex justify-between items-start gap-2">
                     <div>
-                      <span className="text-[10px] font-bold font-mono text-slate-400 block uppercase">Sl. #{idx + 1}</span>
+                      <span className="text-[10px] font-bold font-mono text-slate-400 block uppercase">Roll #{formatStudentRollDisplay(stu, idx)}</span>
                       <span className="font-bold text-slate-900 text-sm">{stu.name}</span>
                     </div>
                   </div>
@@ -1855,11 +2140,11 @@ export function StudentDuesView({
                         </button>
                       </th>
                     )}
-                    <th className="p-4 cursor-pointer hover:bg-slate-100" onClick={() => requestSort('id')}>
+                    <th className="p-4 cursor-pointer hover:bg-slate-100 select-none transition-colors" onClick={() => requestSort('id')} title="Click to sort by Roll Number">
                       Roll No {sortBy === 'id' && (sortOrder === 'asc' ? '↑' : '↓')}
                     </th>
-                    <th className="p-4 cursor-pointer hover:bg-slate-100" onClick={() => requestSort('name')}>
-                      Member Name {sortBy === 'name' && (sortOrder === 'asc' ? '↑' : '↓')}
+                    <th className="p-4 cursor-pointer hover:bg-slate-100 select-none transition-colors" onClick={() => requestSort('name')} title="Click to sort alphabetically by Name">
+                      Member Name (A-Z) {sortBy === 'name' && (sortOrder === 'asc' ? '↑' : '↓')}
                     </th>
                     <th className="p-4 cursor-pointer hover:bg-slate-100 text-right" onClick={() => requestSort('paid')}>
                       Drive Given (Dr) {sortBy === 'paid' && (sortOrder === 'asc' ? '↑' : '↓')}
@@ -1918,7 +2203,7 @@ export function StudentDuesView({
 
                           {/* Roll No */}
                           <td className="p-4 font-bold font-mono text-slate-900 uppercase">
-                            {idx + 1}
+                            {formatStudentRollDisplay(row.student, idx)}
                           </td>
 
                           {/* Name */}
@@ -2070,7 +2355,7 @@ export function StudentDuesView({
                           </button>
                         )}
                         <div>
-                          <span className="text-[10px] font-bold font-mono text-slate-400 block uppercase">Roll #{idx + 1}</span>
+                          <span className="text-[10px] font-bold font-mono text-slate-400 block uppercase">Roll #{formatStudentRollDisplay(row.student, idx)}</span>
                           <span className="font-bold text-slate-900 text-sm leading-snug block">{row.student.name}</span>
                         </div>
                       </div>
@@ -2299,11 +2584,11 @@ export function StudentDuesView({
 
               <form onSubmit={handleSubmitMasterStudent} className="p-6 space-y-4">
                 <div>
-                  <label className="block text-[10px] font-bold text-slate-505 uppercase tracking-wider font-mono mb-1">Roll No / ID *</label>
+                  <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider font-mono mb-1">Roll No / ID *</label>
                   <input
                     type="text"
                     required
-                    placeholder="e.g. ROLL-101"
+                    placeholder="e.g. ROLL-1 or 1"
                     disabled={!!editingStudent}
                     value={studentId}
                     onChange={(e) => setStudentId(e.target.value)}
@@ -2476,7 +2761,7 @@ export function StudentDuesView({
                             
                             return (
                               <tr key={stu.id} className="hover:bg-slate-50/50 leading-none">
-                                <td className="p-2 font-mono font-bold text-slate-900 text-left uppercase truncate">{stu.id}</td>
+                                <td className="p-2 font-mono font-bold text-slate-900 text-left">{formatStudentRollDisplay(stu, idx)}</td>
                                 <td className="p-2 text-slate-900 font-bold truncate text-left">{stu.name}</td>
                                 
                                 {/* Given paid input */}
@@ -2541,7 +2826,7 @@ export function StudentDuesView({
                         return (
                           <div key={stu.id} className="bg-white border border-gray-200 p-4 rounded-xl space-y-3.5 shadow-3xs text-left">
                             <div className="flex justify-between items-center border-b border-gray-100 pb-2">
-                              <span className="text-[10px] font-mono font-bold text-slate-400 uppercase">{stu.id}</span>
+                              <span className="text-[10px] font-mono font-bold text-slate-400 uppercase">Roll #{formatStudentRollDisplay(stu, idx)}</span>
                               <span className="font-extrabold text-slate-900 text-xs truncate max-w-[200px]">{stu.name}</span>
                             </div>
                             <div className="grid grid-cols-2 gap-3">
@@ -2614,7 +2899,7 @@ export function StudentDuesView({
                           <p className="font-bold underline text-indigo-950">Option 1: Comma/Tab Separated</p>
                           <p>RollNo, DuesPaid, TargetDue, Remarks</p>
                           <p className="text-slate-500 italic mt-1 leading-relaxed">
-                            ROLL-101, 250, 500, Paid GPay<br />
+                            ROLL-1, 250, 500, Paid GPay<br />
                             Yoonus Chr, 500, 500, Cash
                           </p>
                         </div>
@@ -2635,7 +2920,7 @@ export function StudentDuesView({
                       </label>
                       <textarea
                         required
-                        placeholder="ROLL-101, 500, 500, Paid GPay&#10;Fasel Rahman, 200, 500, Installment 1&#10;Aisha Jabeen 500&#10;Muhammad Shafi: 300"
+                        placeholder="ROLL-1, 500, 500, Paid GPay&#10;Fasel Rahman, 200, 500, Installment 1&#10;Aisha Jabeen 500&#10;Muhammad Shafi: 300"
                         rows={11}
                         value={bulkPasteInput}
                         onChange={(e) => setBulkPasteInput(e.target.value)}
@@ -3291,8 +3576,8 @@ export function StudentDuesView({
                   </div>
                   <div>
                     <span className="font-bold text-slate-800 block mb-0.5">Format B (Spreadsheet pasted):</span>
-                    ROLL-104 , Zainab K , Class Member , Active leader<br />
-                    ROLL-105 , Ibrahim S , Class Member , Scholarship<br />
+                    ROLL-4 , Zainab K , Class Member , Active leader<br />
+                    ROLL-5 , Ibrahim S , Class Member , Scholarship<br />
                     <span className="text-gray-400 italic">(ID, Name, Class, Remarks)</span>
                   </div>
                 </div>
@@ -3312,7 +3597,7 @@ export function StudentDuesView({
                 <div className="flex items-start gap-2 p-3 border border-indigo-100 bg-indigo-50/40 rounded-xl">
                   <Info size={14} className="text-indigo-600 shrink-0 mt-0.5" />
                   <div className="text-[11px] text-indigo-900 leading-normal">
-                    <strong>Auto ID Sequence:</strong> Absent explicit ID codes, names automatically assign available series codes (e.g. <code>ROLL-101</code>, etc.) based on your current master register count.
+                    <strong>Auto ID Sequence:</strong> Absent explicit ID codes, names automatically assign available series codes (e.g. <code>ROLL-1</code>, etc.) based on your current master register count.
                   </div>
                 </div>
 

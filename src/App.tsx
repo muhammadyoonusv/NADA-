@@ -271,7 +271,11 @@ export default function App() {
     const unsub = onSnapshot(collection(db, 'accounts'), async (snapshot) => {
       const list: Account[] = [];
       snapshot.forEach((docSnap) => {
-        list.push(docSnap.data() as Account);
+        const acc = docSnap.data() as Account;
+        if (acc.name && /quran/i.test(acc.name)) {
+          acc.name = acc.name.replace(/quran\s*(department)?/gi, 'Class Union').trim();
+        }
+        list.push(acc);
       });
 
       if (snapshot.empty) {
@@ -334,7 +338,19 @@ export default function App() {
     const unsub = onSnapshot(collection(db, 'entries'), async (snapshot) => {
       const list: JournalEntry[] = [];
       snapshot.forEach((docSnap) => {
-        list.push(docSnap.data() as JournalEntry);
+        const entry = docSnap.data() as JournalEntry;
+        if (entry.narration && /quran/i.test(entry.narration)) {
+          entry.narration = entry.narration
+            .replace(/quran-(\d+)/gi, 'ROLL-$1')
+            .replace(/quran\s*(department)?/gi, 'Class Member');
+        }
+        if (entry.narration && /ROLL-1\d{2}/i.test(entry.narration)) {
+          entry.narration = entry.narration.replace(/ROLL-(1\d{2})/gi, (_, num) => {
+            const val = parseInt(num, 10);
+            return val > 100 && val <= 199 ? `ROLL-${val - 100}` : `ROLL-${val}`;
+          });
+        }
+        list.push(entry);
       });
 
       if (snapshot.empty && !loadingAccounts) {
@@ -437,6 +453,16 @@ export default function App() {
         if (studentObj && 'phone' in studentObj) {
           delete studentObj.phone;
         }
+        // Normalize any legacy roll numbers offset above 100 (e.g. ROLL-101..ROLL-135 -> ROLL-1..ROLL-35)
+        if (studentObj && studentObj.id) {
+          const match = studentObj.id.match(/^(?:ROLL-|QURAN-)?(1\d{2})$/i);
+          if (match) {
+            const legacyNum = parseInt(match[1], 10);
+            if (legacyNum > 100 && legacyNum <= 199) {
+              studentObj.id = `ROLL-${legacyNum - 100}`;
+            }
+          }
+        }
         // Remove all Quran related data and add them as members of the class
         if (!studentObj.className || /quran/i.test(studentObj.className)) {
           studentObj.className = 'Class Member';
@@ -466,7 +492,38 @@ export default function App() {
     const unsub = onSnapshot(collection(db, 'programs'), (snapshot) => {
       const list: Program[] = [];
       snapshot.forEach((docSnap) => {
-        list.push(docSnap.data() as Program);
+        const prog = docSnap.data() as Program;
+        if (prog.studentDues) {
+          const normalizedDues: { [key: string]: any } = {};
+          Object.entries(prog.studentDues).forEach(([stuKey, due]: [string, any]) => {
+            let cleanKey = stuKey;
+            const match = stuKey.match(/^(?:ROLL-|QURAN-)?(1\d{2})$/i);
+            if (match) {
+              const legacyNum = parseInt(match[1], 10);
+              if (legacyNum > 100 && legacyNum <= 199) {
+                cleanKey = `ROLL-${legacyNum - 100}`;
+              }
+            }
+            if (due && due.remarks && /quran/i.test(due.remarks)) {
+              due.remarks = due.remarks.replace(/quran\s*(department)?\s*(active\s*roster)?/gi, 'Class Member').trim();
+            }
+            normalizedDues[cleanKey] = due;
+          });
+          prog.studentDues = normalizedDues;
+        }
+        if (prog.excludedStudentIds) {
+          prog.excludedStudentIds = prog.excludedStudentIds.map(id => {
+            const match = id.match(/^(?:ROLL-|QURAN-)?(1\d{2})$/i);
+            if (match) {
+              const legacyNum = parseInt(match[1], 10);
+              if (legacyNum > 100 && legacyNum <= 199) {
+                return `ROLL-${legacyNum - 100}`;
+              }
+            }
+            return id;
+          });
+        }
+        list.push(prog);
       });
       list.sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''));
       setPrograms(list);
@@ -1908,6 +1965,8 @@ export default function App() {
               entries={entries}
               students={students}
               programs={programs}
+              academicYear={academicYear}
+              setAcademicYear={setAcademicYear}
               isEditor={isEditor}
               showToast={showToast}
               onAddStudent={handleAddStudent}
@@ -2292,30 +2351,6 @@ export default function App() {
             </div>
 
             <div className="flex-1 overflow-y-auto p-3 space-y-2.5">
-              {/* Button: Gemini AI (Chartered Accountant) */}
-              <div className="border border-blue-200 rounded-xl overflow-hidden bg-gradient-to-r from-blue-50/80 to-indigo-50/60 shadow-3xs transition-all">
-                <button
-                  type="button"
-                  id="gemini-sidebar-button"
-                  onClick={() => {
-                    setIsBotOpen(true);
-                    setIsAppSidebarOpen(false);
-                  }}
-                  className="w-full flex items-center justify-between p-3.5 text-left cursor-pointer transition-colors group hover:bg-blue-100/70"
-                  title="Open Gemini AI Assistant"
-                >
-                  <div className="flex items-center gap-2.5 text-xs text-blue-950">
-                    <Sparkles size={16} className="text-blue-600 shrink-0" />
-                    <div>
-                      <div className="font-bold flex items-center gap-1.5">
-                        <span>Gemini AI</span>
-                      </div>
-                      <div className="text-[10px] text-blue-600 font-medium">Google Gemini Financial Assistant</div>
-                    </div>
-                  </div>
-                  <ChevronRight size={16} className="text-blue-400 group-hover:text-blue-700 transition-colors" />
-                </button>
-              </div>
 
               {/* Button 1: Profile (Opens dedicated Profile page) */}
               <div className="border border-slate-200 rounded-xl overflow-hidden bg-white shadow-3xs transition-all">

@@ -53,6 +53,7 @@ export interface Student {
   status: 'Paid' | 'Partial' | 'Pending';
   remarks?: string;
   lastPaymentDate?: string;
+  academicYear?: string; // Added field
 }
 
 export interface StudentDuesItem {
@@ -72,5 +73,6 @@ export interface Program {
   studentDues: { [studentId: string]: StudentDuesItem };
   excludedStudentIds?: string[];
   createdAt?: string;
+  academicYear?: string; // Added field
 }
 

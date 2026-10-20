@@ -7,7 +7,7 @@ import React, { useState, useMemo } from 'react';
 import { jsPDF } from 'jspdf';
 import html2canvas from 'html2canvas-pro';
 import { Account, JournalEntry, Student, Program, AccountType } from '../types';
-import { FilePlus2, Trash2, Download, Upload, RefreshCcw, Search, PlusCircle, Sparkles, Filter, Info, Edit, ArrowDownUp, Printer, ShieldCheck, FileCheck, CheckCircle2, Paperclip, File, Eye, X, ExternalLink, FileText, ArrowLeftRight, Users, Plus } from 'lucide-react';
+import { FilePlus2, Trash2, Download, Upload, RefreshCcw, Search, PlusCircle, Sparkles, Filter, Info, Edit, ArrowDownUp, Printer, ShieldCheck, FileCheck, CheckCircle2, Paperclip, File, Eye, X, ExternalLink, FileText, ArrowLeftRight, Users, Plus, Camera, AlertTriangle } from 'lucide-react';
 import { getTrialBalance, getReceiptsAndPaymentsSum, getBalanceSheet, getIncomeAndExpenditure, getAccountBalances, resolveAccountName } from '../utils/accounting';
 import { DateRangeFilter } from './DateRangeFilter';
 import { StatementPaperHeader } from './StatementPaperHeader';
@@ -196,6 +196,134 @@ export function JournalSheet({
   const [isCompoundMode, setIsCompoundMode] = useState(false);
   const [compDebits, setCompDebits] = useState<{ accountId: string; amount: string; type?: AccountType }[]>([{ accountId: '', amount: '' }]);
   const [compCredits, setCompCredits] = useState<{ accountId: string; amount: string; type?: AccountType }[]>([{ accountId: '', amount: '' }]);
+
+  // ✨ AI Magic Auto-Fill states
+  const [aiPrompt, setAiPrompt] = useState('');
+  const [isAiAutofilling, setIsAiAutofilling] = useState(false);
+  const [aiExplanation, setAiExplanation] = useState<string | null>(null);
+  const [aiMissingFields, setAiMissingFields] = useState<string[]>([]);
+  const [pendingNewAccounts, setPendingNewAccounts] = useState<{ name: string; type: AccountType }[]>([]);
+  const aiInputRef = React.useRef<HTMLInputElement>(null);
+  const aiScanFileInputRef = React.useRef<HTMLInputElement>(null);
+
+  // Focus AI input whenever form modal opens
+  React.useEffect(() => {
+    if (isFormOpen) {
+      const timer = setTimeout(() => {
+        aiInputRef.current?.focus();
+      }, 150);
+      return () => clearTimeout(timer);
+    }
+  }, [isFormOpen]);
+
+  // Execute AI Magic Auto-Fill
+  const handleAiAutofill = async (customPrompt?: string, attachmentFile?: { name: string; type: string; base64: string; size: number }) => {
+    const textToProcess = (customPrompt !== undefined ? customPrompt : aiPrompt).trim();
+    if (!textToProcess && !attachmentFile) return;
+
+    setIsAiAutofilling(true);
+    setAiExplanation(null);
+    setAiMissingFields([]);
+
+    try {
+      const bodyPayload: any = {
+        prompt: textToProcess,
+        accounts
+      };
+
+      if (attachmentFile) {
+        bodyPayload.attachment = {
+          name: attachmentFile.name,
+          type: attachmentFile.type,
+          base64: attachmentFile.base64
+        };
+      }
+
+      const res = await fetch('/api/gemini/autofill-entry', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(bodyPayload)
+      });
+
+      if (!res.ok) {
+        throw new Error('AI service returned error status ' + res.status);
+      }
+
+      const data = await res.json();
+
+      if (data) {
+        if (data.date) setDate(data.date);
+        if (data.totalAmount && Number(data.totalAmount) > 0) {
+          setAmount(Number(data.totalAmount).toString());
+        }
+        if (data.narration) setNarration(data.narration);
+        if (data.simpleExplanation) setAiExplanation(data.simpleExplanation);
+        if (Array.isArray(data.missingFields)) setAiMissingFields(data.missingFields);
+
+        const newAccountsFound: { name: string; type: AccountType }[] = [];
+
+        if (data.isCompound) {
+          setIsCompoundMode(true);
+          if (Array.isArray(data.debits) && data.debits.length > 0) {
+            setCompDebits(data.debits.map((d: any) => {
+              if (d.isNewAccount || !accounts.some(a => a.id === d.accountId)) {
+                newAccountsFound.push({ name: d.accountName, type: (d.accountType as AccountType) || 'Expense' });
+                return { accountId: d.accountName, amount: d.amount ? String(d.amount) : '', type: (d.accountType as AccountType) || 'Expense' };
+              }
+              return { accountId: d.accountId || d.accountName, amount: d.amount ? String(d.amount) : '', type: (d.accountType as AccountType) || 'Asset' };
+            }));
+          }
+          if (Array.isArray(data.credits) && data.credits.length > 0) {
+            setCompCredits(data.credits.map((c: any) => {
+              if (c.isNewAccount || !accounts.some(a => a.id === c.accountId)) {
+                newAccountsFound.push({ name: c.accountName, type: (c.accountType as AccountType) || 'Liability' });
+                return { accountId: c.accountName, amount: c.amount ? String(c.amount) : '', type: (c.accountType as AccountType) || 'Liability' };
+              }
+              return { accountId: c.accountId || c.accountName, amount: c.amount ? String(c.amount) : '', type: (c.accountType as AccountType) || 'Asset' };
+            }));
+          }
+        } else {
+          setIsCompoundMode(false);
+          if (Array.isArray(data.debits) && data.debits[0]) {
+            const deb = data.debits[0];
+            if (deb.isNewAccount || !accounts.some(a => a.id === deb.accountId)) {
+              newAccountsFound.push({ name: deb.accountName, type: (deb.accountType as AccountType) || 'Expense' });
+              setDebitAccount(deb.accountName);
+            } else {
+              setDebitAccount(deb.accountId);
+            }
+            setDebitAccountType((deb.accountType as AccountType) || 'Expense');
+            if (deb.amount && Number(deb.amount) > 0) setAmount(Number(deb.amount).toString());
+          }
+          if (Array.isArray(data.credits) && data.credits[0]) {
+            const cr = data.credits[0];
+            if (cr.isNewAccount || !accounts.some(a => a.id === cr.accountId)) {
+              newAccountsFound.push({ name: cr.accountName, type: (cr.accountType as AccountType) || 'Liability' });
+              setCreditAccount(cr.accountName);
+            } else {
+              setCreditAccount(cr.accountId);
+            }
+            setCreditAccountType((cr.accountType as AccountType) || 'Liability');
+          }
+        }
+
+        setPendingNewAccounts(newAccountsFound);
+
+        // If an attachment was scanned, also append it to attached files
+        if (attachmentFile) {
+          setAttachedFiles(prev => {
+            if (prev.some(f => f.name === attachmentFile.name)) return prev;
+            return [...prev, attachmentFile];
+          });
+        }
+      }
+    } catch (err: any) {
+      console.error('Error auto-filling from AI:', err);
+      alert('Unable to auto-fill form: ' + (err?.message || 'Please check your connection.'));
+    } finally {
+      setIsAiAutofilling(false);
+    }
+  };
 
   // Add listener for quick templates from props
   React.useEffect(() => {
@@ -438,17 +566,57 @@ export function JournalSheet({
 
     setIsSaving(true);
     try {
+      // Auto-create any pending new accounts in Firebase Firestore first
+      const accountIdMapping: Record<string, string> = {};
+      if (pendingNewAccounts.length > 0 && onAddAccount) {
+        for (const newAcc of pendingNewAccounts) {
+          const existing = accounts.find(a => a.name.toLowerCase() === newAcc.name.toLowerCase());
+          if (existing) {
+            accountIdMapping[newAcc.name] = existing.id;
+          } else {
+            const createdId = await onAddAccount({
+              name: newAcc.name,
+              type: newAcc.type
+            });
+            if (createdId) {
+              accountIdMapping[newAcc.name] = createdId;
+            }
+          }
+        }
+      }
+
+      // Map any newly created account IDs into parsed debits and credits
+      const resolvedDebits = parsedDebits.map(d => ({
+        ...d,
+        accountId: accountIdMapping[d.accountId] || d.accountId,
+        type: d.type || accounts.find(a => a.id === (accountIdMapping[d.accountId] || d.accountId))?.type || 'Expense'
+      }));
+
+      const resolvedCredits = parsedCredits.map(c => ({
+        ...c,
+        accountId: accountIdMapping[c.accountId] || c.accountId,
+        type: c.type || accounts.find(a => a.id === (accountIdMapping[c.accountId] || c.accountId))?.type || 'Liability'
+      }));
+
+      const finalDebitAccount = isCompoundMode 
+        ? resolvedDebits[0].accountId 
+        : (accountIdMapping[debitAccount] || debitAccount);
+
+      const finalCreditAccount = isCompoundMode 
+        ? resolvedCredits[0].accountId 
+        : (accountIdMapping[creditAccount] || creditAccount);
+
       const payload: Omit<JournalEntry, 'id'> & { files?: typeof attachedFiles } = {
         date,
-        debitAccount: isCompoundMode ? parsedDebits[0].accountId : debitAccount,
-        creditAccount: isCompoundMode ? parsedCredits[0].accountId : creditAccount,
-        debitAccountType: isCompoundMode ? parsedDebits[0].type : (debitAccountType || accounts.find(a => a.id === debitAccount)?.type),
-        creditAccountType: isCompoundMode ? parsedCredits[0].type : (creditAccountType || accounts.find(a => a.id === creditAccount)?.type),
+        debitAccount: finalDebitAccount,
+        creditAccount: finalCreditAccount,
+        debitAccountType: isCompoundMode ? resolvedDebits[0].type : (debitAccountType || accounts.find(a => a.id === finalDebitAccount)?.type),
+        creditAccountType: isCompoundMode ? resolvedCredits[0].type : (creditAccountType || accounts.find(a => a.id === finalCreditAccount)?.type),
         amount: parseFloat(finalAmount.toFixed(2)),
         narration: narration.trim(),
         isCompound: isCompoundMode,
-        debits: isCompoundMode ? parsedDebits : undefined,
-        credits: isCompoundMode ? parsedCredits : undefined,
+        debits: isCompoundMode ? resolvedDebits : undefined,
+        credits: isCompoundMode ? resolvedCredits : undefined,
       };
 
       if (attachedFiles && attachedFiles.length > 0) {
@@ -479,6 +647,10 @@ export function JournalSheet({
         setAttachedFiles([]);
         setCompDebits([{ accountId: '', amount: '' }]);
         setCompCredits([{ accountId: '', amount: '' }]);
+        setAiPrompt('');
+        setAiExplanation(null);
+        setAiMissingFields([]);
+        setPendingNewAccounts([]);
       }
     } catch (err) {
       console.error("Error committing journal entry:", err);
@@ -1072,6 +1244,99 @@ export function JournalSheet({
             </div>
 
             <form onSubmit={handleSubmit} className="p-5 space-y-4 overflow-y-auto flex-1">
+              {/* ✨ AI Magic Auto-Fill Bar */}
+              <div className="bg-gradient-to-r from-blue-50/90 via-indigo-50/90 to-purple-50/90 border border-blue-200/90 rounded-2xl p-3.5 shadow-3xs space-y-2.5">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold text-blue-950 flex items-center gap-1.5">
+                    <Sparkles size={14} className="text-blue-600 animate-pulse" />
+                    ✨ AI Magic Auto-Fill Bar
+                  </span>
+                  <span className="text-[10px] text-blue-700 font-medium">
+                    Zero-jargon plain English double-entry assistant
+                  </span>
+                </div>
+
+                <div className="flex gap-2">
+                  <div className="relative flex-1">
+                    <input
+                      ref={aiInputRef}
+                      type="text"
+                      value={aiPrompt}
+                      onChange={(e) => setAiPrompt(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          e.preventDefault();
+                          handleAiAutofill();
+                        }
+                      }}
+                      placeholder="Describe what happened in everyday words (e.g., 'Muhsin gave 100 as cash for credit to union' or 'Paid 500 for tea: 200 cash, 300 UPI')..."
+                      disabled={isAiAutofilling}
+                      className="w-full pl-3 pr-8 py-2 text-xs bg-white border border-blue-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:outline-none placeholder:text-slate-400 text-slate-800 shadow-3xs disabled:opacity-60"
+                    />
+                    {aiPrompt && (
+                      <button
+                        type="button"
+                        onClick={() => setAiPrompt('')}
+                        className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 text-xs font-bold"
+                      >
+                        ✕
+                      </button>
+                    )}
+                  </div>
+
+                  {/* Auto-Fill Form Button */}
+                  <button
+                    type="button"
+                    onClick={() => handleAiAutofill()}
+                    disabled={isAiAutofilling || (!aiPrompt.trim())}
+                    className="px-3.5 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1.5 shadow-3xs shrink-0 cursor-pointer"
+                  >
+                    {isAiAutofilling ? (
+                      <>
+                        <RefreshCcw size={13} className="animate-spin" />
+                        <span>Filling...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Sparkles size={13} />
+                        <span>✨ Auto-Fill Form</span>
+                      </>
+                    )}
+                  </button>
+
+                  {/* Scan Receipt/Bill Button */}
+                  <input
+                    ref={aiScanFileInputRef}
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (!file) return;
+                      compressImage(file).then((res) => {
+                        handleAiAutofill(aiPrompt || 'Scan receipt and extract transaction details', {
+                          name: file.name,
+                          type: file.type,
+                          size: res.size,
+                          base64: res.base64
+                        });
+                      });
+                      e.target.value = '';
+                    }}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => aiScanFileInputRef.current?.click()}
+                    disabled={isAiAutofilling}
+                    className="px-3 py-2 bg-white hover:bg-indigo-50 text-indigo-700 border border-indigo-200 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 shadow-3xs shrink-0 cursor-pointer disabled:opacity-50"
+                    title="Scan Receipt/Bill Image"
+                  >
+                    <Camera size={14} />
+                    <span className="hidden sm:inline">📷 Scan Bill</span>
+                  </button>
+                </div>
+              </div>
+
               {/* Compound vs Standard Toggle */}
               <div className="bg-indigo-50/50 border border-indigo-150/60 rounded-xl p-3 flex items-center justify-between no-print">
                 <div>
@@ -1339,7 +1604,14 @@ export function JournalSheet({
                     </div>
 
                     <div>
-                      <label className="block text-xs font-semibold text-gray-600 uppercase mb-1">Entry Amount (₹ INR)</label>
+                      <div className="flex items-center justify-between mb-1">
+                        <label className="block text-xs font-semibold text-gray-600 uppercase">Entry Amount (₹ INR)</label>
+                        {aiMissingFields.includes('amount') && (
+                          <span className="text-[10px] text-amber-700 font-bold bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200">
+                            ⚠️ Enter Amount
+                          </span>
+                        )}
+                      </div>
                       <input
                         type="number"
                         step="0.01"
@@ -1347,8 +1619,15 @@ export function JournalSheet({
                         required
                         placeholder="00.0"
                         value={amount}
-                        onChange={(e) => setAmount(e.target.value)}
-                        className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm font-mono focus:ring-2 focus:ring-blue-500 focus:outline-none focus:border-blue-500"
+                        onChange={(e) => {
+                          setAmount(e.target.value);
+                          setAiMissingFields(prev => prev.filter(f => f !== 'amount'));
+                        }}
+                        className={`w-full px-3 py-2 border rounded-lg text-sm font-mono focus:ring-2 focus:outline-none ${
+                          aiMissingFields.includes('amount')
+                            ? 'border-amber-400 bg-amber-50/50 focus:ring-amber-400'
+                            : 'border-gray-200 focus:ring-blue-500 focus:border-blue-500'
+                        }`}
                       />
                     </div>
                   </div>
@@ -1376,6 +1655,12 @@ export function JournalSheet({
                         setDebitAccountType(matchType as AccountType);
                       }}
                     />
+                    {pendingNewAccounts.some(na => na.name === debitAccount) && (
+                      <div className="mt-1 flex items-center gap-1.5 text-[11px] text-amber-800 font-semibold bg-amber-50 px-2.5 py-1 rounded-lg border border-amber-200">
+                        <Sparkles size={12} className="text-amber-600" />
+                        <span>✨ New {pendingNewAccounts.find(na => na.name === debitAccount)?.type || 'Account'} Account (Will be created automatically in Firebase)</span>
+                      </div>
+                    )}
                     {debitAccount && (
                       <div className="mt-1.5 flex items-center justify-between bg-emerald-50/50 p-2 rounded-lg border border-emerald-100 no-print">
                         <span className="text-[10px] text-emerald-800 font-semibold font-sans">
@@ -1403,6 +1688,44 @@ export function JournalSheet({
                   </div>
 
                   <div>
+                    {aiMissingFields.includes('payment_mode') && (
+                      <div className="p-2.5 bg-amber-50 border border-amber-200/90 rounded-xl space-y-1.5 mb-2">
+                        <div className="text-[11px] font-bold text-amber-900 flex items-center gap-1">
+                          <AlertTriangle size={13} className="text-amber-600" />
+                          <span>Missing payment mode: Was this paid in Cash or Bank / UPI?</span>
+                        </div>
+                        <div className="flex gap-2">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const cash = accounts.find(a => a.name.toLowerCase().includes('cash')) || accounts[0];
+                              if (cash) {
+                                setCreditAccount(cash.id);
+                                setCreditAccountType('Asset');
+                                setAiMissingFields(prev => prev.filter(f => f !== 'payment_mode'));
+                              }
+                            }}
+                            className="px-2.5 py-1 bg-white hover:bg-emerald-50 text-emerald-800 border border-emerald-300 rounded-lg text-xs font-semibold cursor-pointer shadow-3xs"
+                          >
+                            💵 Use Cash in Hand
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const bank = accounts.find(a => a.name.toLowerCase().includes('bank')) || accounts[1];
+                              if (bank) {
+                                setCreditAccount(bank.id);
+                                setCreditAccountType('Asset');
+                                setAiMissingFields(prev => prev.filter(f => f !== 'payment_mode'));
+                              }
+                            }}
+                            className="px-2.5 py-1 bg-white hover:bg-blue-50 text-blue-800 border border-blue-300 rounded-lg text-xs font-semibold cursor-pointer shadow-3xs"
+                          >
+                            🏦 Use Bank / UPI
+                          </button>
+                        </div>
+                      </div>
+                    )}
                     <label className="block text-xs font-semibold text-gray-600 uppercase mb-1">CREDIT ACCOUNT (Where money/value comes from)</label>
                     <AccountCreatableSelect
                       accounts={accounts}
@@ -1425,6 +1748,12 @@ export function JournalSheet({
                         setCreditAccountType(matchType as AccountType);
                       }}
                     />
+                    {pendingNewAccounts.some(na => na.name === creditAccount) && (
+                      <div className="mt-1 flex items-center gap-1.5 text-[11px] text-amber-800 font-semibold bg-amber-50 px-2.5 py-1 rounded-lg border border-amber-200">
+                        <Sparkles size={12} className="text-amber-600" />
+                        <span>✨ New {pendingNewAccounts.find(na => na.name === creditAccount)?.type || 'Liability'} Account (Will be created automatically in Firebase)</span>
+                      </div>
+                    )}
                     {creditAccount && (
                       <div className="mt-1.5 flex items-center justify-between bg-rose-50/50 p-2 rounded-lg border border-rose-100 no-print">
                         <span className="text-[10px] text-rose-800 font-semibold font-sans">
@@ -1687,6 +2016,24 @@ export function JournalSheet({
                   </div>
                 )}
               </div>
+
+              {/* 1-Line Plain-English Helper Box */}
+              {aiExplanation && (
+                <div className="bg-gradient-to-r from-purple-50 via-indigo-50 to-blue-50 border border-purple-200/90 rounded-xl p-3.5 text-xs text-purple-950 flex items-start gap-2.5 shadow-3xs">
+                  <Sparkles size={16} className="text-purple-600 shrink-0 mt-0.5" />
+                  <div className="flex-1">
+                    <span className="font-bold text-purple-900 block mb-0.5 font-sans">💡 Why this works</span>
+                    <p className="text-purple-900/90 leading-relaxed font-sans">{aiExplanation}</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setAiExplanation(null)}
+                    className="text-purple-400 hover:text-purple-700 text-xs font-bold cursor-pointer p-0.5"
+                  >
+                    ✕
+                  </button>
+                </div>
+              )}
 
               <div className="pt-4 border-t border-gray-105 flex gap-2 justify-end">
                 <button

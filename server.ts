@@ -210,187 +210,103 @@ Make sure that 'debit' and 'credit' fields are exact string IDs corresponding to
     }
   });
 
-  // Interactive AI Ledger Chatbot Endpoint
-  app.post('/api/gemini/chat', async (req, res) => {
+  // =========================================================================
+  // NADA SMART AI ASSISTANT ENDPOINT: Auto-Fill Journal Entry
+  // =========================================================================
+  app.post('/api/gemini/autofill-entry', async (req, res) => {
     try {
-      const { prompt, history = [], context = {}, attachment, thinkMode = false } = req.body;
+      const { prompt, accounts = [], attachment } = req.body;
 
       if (!prompt && !attachment) {
-        return res.status(400).json({ error: 'Prompt or attachment is required.' });
+        return res.status(400).json({ error: 'Please describe the transaction or attach a receipt/bill image.' });
       }
 
       const cleanPrompt = (prompt || '').trim();
-
-      // SUDDEN / INSTANT RESPONSE ENGINE:
-      // If user sends a conversational greeting, intro, or status check (without attachments),
-      // formulate an immediate, rich CA response with real ledger metrics in < 15ms!
-      if (!attachment) {
-        const instantResponse = getInstantConversationalResponse(cleanPrompt, context);
-        if (instantResponse) {
-          return res.json(instantResponse);
-        }
-      }
-
       const geminiKey = process.env.GEMINI_API_KEY;
-      if (!geminiKey) {
-        return res.status(500).json({
-          error: 'GEMINI_API_KEY environment variable is not defined on the server side. Please configure it in Settings.'
-        });
-      }
 
-      const ai = new GoogleGenAI({
-        apiKey: geminiKey,
-        httpOptions: {
-          headers: {
-            'User-Agent': 'aistudio-build',
-          }
-        }
-      });
+      const systemInstruction = `You are the built-in Smart AI Accounting Assistant for the "NADA UNION LEDGER" app. Your job is to convert casual, everyday sentences written by student union treasurers (who know zero accounting) into 100% mathematically accurate Double-Entry bookkeeping data to auto-fill their transaction form.
 
-      const { accounts = [], entriesSummary = {}, financialMetrics = {}, orgInfo = {}, memories = [] } = context;
+CRITICAL ACCOUNTING & LOGIC RULES:
+1. ZERO TEXTBOOK JARGON: In your simpleExplanation field, NEVER use words like "Nominal Account", "Real Account", "Personal Account", "Asset Inflow", or "Asset Outflow". Explain the Debit and Credit in warm, everyday commonsense English in 1 or 2 short sentences.
+2. LOANS, CREDIT & ADVANCES FROM PEOPLE (CRITICAL):
+   - When a user says someone gave money to the union "as credit", "as a loan", "advance", or "to be paid back" (e.g., "Muhsin gave 100 as cash for credit to union" or "muhsin paid to union 100 as cash for credit" or "muhsin paid to union 100as cash for credit"):
+   - NEVER classify this as an Expense (like Food & Refreshments) or Income!
+   - Money came into the union, so DEBIT Cash in Hand (or Bank, depending on mode) as an Asset.
+   - The union now owes this person money, so CREDIT <Person Name> (Union Payable) classified strictly as a Liability.
+3. REPAYING LOANS OR SETTLING CREDIT:
+   - If the union pays back a person they owed (e.g., "Returned 100 cash to Muhsin"), DEBIT <Person Name> (Union Payable) (Liability) and CREDIT Cash in Hand (Asset).
+4. EVERYDAY EXPENSES & PURCHASES:
+   - "Spent 450 cash on tea/snacks" -> DEBIT Food & Refreshments (Expense), CREDIT Cash in Hand (Asset).
+   - If bought ON CREDIT from a shop/person without paying cash yet (e.g., "Printed banners for 1000 on credit from Royal Printers") -> DEBIT Printing & Stationery (Expense), CREDIT Royal Printers (Payable) (Liability).
+5. INCOME, COLLECTIONS & STUDENT DUES:
+   - "Collected 2000 membership fees via UPI/Bank" -> DEBIT Bank (Asset), CREDIT Membership Fees (Income).
+6. COMPOUND / SPLIT ENTRIES:
+   - If a transaction splits across multiple payment methods or accounts (e.g., "Paid 500 for stage decor, 200 cash and 300 GPay"), set isCompound: true and output balanced debits and credits arrays so Total Debits === Total Credits.
+7. STRICT ACCOUNT MATCHING:
+   - Always check the provided existingAccounts list first. If an exact or close match exists (e.g., "Cash" or "Cash in Hand", "Bank" or "Union Bank Account"), use the exact existing account name and ID, and set isNewAccount: false.
+   - Only set isNewAccount: true when no suitable account exists in the user's ledger (such as a specific person's payable account like "Muhsin (Union Payable)").
+8. NEVER HALLUCINATE AMOUNTS:
+   - Extract numbers accurately even if typed without spaces (e.g., "100as cash" -> amount is 100, mode is Cash). If the amount is genuinely missing, set totalAmount: 0 and list "amount" in missingFields.
+   - If the payment method (Cash or Bank) was not specified and cannot be reasonably inferred, list "payment_mode" in missingFields.`;
 
-      const systemInstruction = `# GEMINI AI — SENIOR CHARTERED ACCOUNTANT (CA) & CHIEF FINANCIAL ADVISOR
-## NADA UNION LEDGER — DOUBLE-ENTRY ACCOUNTING PLATFORM FOR CLASS UNION TREASURERS
+      let parsedResult: any = null;
 
-You are Gemini AI, the resident Senior Chartered Accountant (CA) and Chief Financial Advisor for NADA UNION LEDGER (a double-entry accounting platform for class union treasurers).
+      if (geminiKey) {
+        try {
+          const ai = new GoogleGenAI({
+            apiKey: geminiKey,
+            httpOptions: {
+              headers: {
+                'User-Agent': 'aistudio-build',
+              }
+            }
+          });
 
-### YOUR ROLE & OBJECTIVES:
-1. Double-Entry Extraction & Account Matching:
-   - When users enter unstructured natural language (e.g., "Paid 450 cash for tea and samosas for meeting", "Received 3000 dues from batch via Google Pay", "Purchased 2 wireless mic sets for 5500 from bank"):
-   - Extract:
-     * Transaction Date (default to current date YYYY-MM-DD if unspecified)
-     * Total Amount in INR (₹)
-     * Nature (Revenue Expense, Capital Asset, Student Dues / Income, Advance, or Contra Transfer)
-     * Payment Mode (Hard Cash / "Cash in Hand" vs. Soft Payment / "Union Bank Account" or UPI)
-     * Debit & Credit Accounts
+          const parts: any[] = [];
 
-2. UNION LEDGER ACCOUNTING RULES:
-   - Real Accounts: Debit what comes in (Asset increase), Credit what goes out (Asset decrease).
-   - Nominal Accounts: Debit all expenses/losses, Credit all income/gains.
-   - Capitalization Rule: Permanent gear (speakers, microphones, sports kits, furniture) must be recorded as Assets, NOT expensed! Consumables (tea, printing, snacks, venue rental) are Expenses.
-   - Contra Rule: Cash withdrawn or deposited between Cash in Hand and Bank Account must balance between Account 1 (Cash) and Account 2 (Bank).
-   - Standard Union Accounts:
-     * Assets: Cash in Hand (id: "1"), Union Bank Account (id: "2"), Equipment / Sound Systems
-     * Income: Membership Contribution Dues (id: "4"), Sponsorship & Program Grants (id: "5"), Donation Account (id: "12")
-     * Expenses: Food & Refreshments (id: "7"), Printing & Stationery (id: "8"), Union Hall / Stage Rent (id: "9"), Trophies & Banners (id: "10"), Welfare Grant / Charity (id: "11")
-
-3. WORKFLOW RULES:
-   - Always Provide Entry Recommendation for Financial Events:
-     If payment mode (Cash vs. Bank/UPI) is not explicitly stated, make the best CA deduction:
-     default petty/consumable expenses (tea, snacks, stationery < ₹2,000) to Cash in Hand (id: "1"), and larger amounts or online transfers to Union Bank Account (id: "2").
-     Always set 'hasSuggestedEntry: true', populate 'suggestedEntry' with debit/credit accounts, amount, date, and audit narration, so the user has the interactive Double-Entry Recommendation Card with the "Record to Ledger Now" button ready immediately!
-     Note in the reply if an assumption was made and remind the user they can swap Dr/Cr or switch between Cash and Bank with 1-click on the card.
-     Always conclude by asking: "Is this journal entry correct and should I record it in the Union Ledger?"
-
-### MARKDOWN REPLY TEMPLATE (When Details Are Complete):
-### Transaction Understood
-* **Date:** [YYYY-MM-DD]
-* **Amount:** ₹[Amount]
-* **Nature:** [Revenue Expense / Income / Capital Asset / Contra]
-* **Payment method:** [Cash in Hand / Union Bank Account]
-* **Purpose:** [Purpose description]
-
-### Suggested Journal Entry
-| Account | Debit (Dr) | Credit (Cr) |
-| :--- | ---: | ---: |
-| **[Debit Account Name]** | ₹[Amount] | - |
-| **[Credit Account Name]** | - | ₹[Amount] |
-
-**Narration:** Being [Audit-compliant explanation starting with "Being..."].
-
-**CA Accounting Rationale:** [1-2 sentences explaining Golden Rules applied].
-
-**Status:** Suggested — awaiting user confirmation. Is this journal entry correct and should I record it in the Union Ledger?
-
-### 4. CA LONG-TERM MEMORY BANK & TREASURER DIRECTIVES
-You have a permanent Memory Bank containing user-defined bookkeeping rules, vendor mappings, and treasurer preferences:
-${Array.isArray(memories) && memories.length > 0 ? memories.map((m: string, i: number) => `* [Directive ${i+1}]: ${m}`).join('\n') : '* No custom directives memorized yet.'}
-
-- ALWAYS adhere strictly to these memorized rules when analyzing transactions.
-- If the user says "remember that...", "memorize this...", "always book X to Y", or gives a general directive, summarize it into the 'memoryToSave' field.
-
-### 5. SHARP CA FORENSIC THINKING PROCESS
-Always populate 'thinkingProcess' with your sharp, expert step-by-step internal reasoning:
-1. Transaction classification & nature (Nominal/Real/Personal; Capital vs Revenue; Contra check).
-2. Golden Rules application: exact rationale for Dr and Cr accounts.
-3. Liquidity impact & risk assessment (Cash in Hand vs Bank balance safety).
-4. Compliance & voucher advice.
-
-### Active Accounts in this Ledger:
-${JSON.stringify(accounts.map((a: any) => ({ id: a.id, name: a.name, type: a.type })), null, 2)}
-
-### Current Balances:
-- Cash in Hand: ${financialMetrics.cashBalance ?? 'N/A'}
-- Bank Balance: ${financialMetrics.bankBalance ?? 'N/A'}
-- Net Surplus: ${financialMetrics.netSurplus ?? 'N/A'}
-- Total Dues Outstanding: ${financialMetrics.totalDuesOutstanding ?? 'N/A'}`;
-
-      // Build contents array for multi-turn history & multimodal attachments
-      const contents: any[] = [];
-
-      if (Array.isArray(history) && history.length > 0) {
-        // Take up to last 10 messages for conversation context
-        for (const msg of history.slice(-10)) {
-          if (msg.text) {
-            contents.push({
-              role: msg.role === 'model' ? 'model' : 'user',
-              parts: [{ text: msg.text }]
+          if (attachment && attachment.base64) {
+            const base64Data = attachment.base64.replace(/^data:[^;]+;base64,/, '');
+            parts.push({
+              inlineData: {
+                mimeType: attachment.type || 'image/jpeg',
+                data: base64Data
+              }
             });
           }
-        }
-      }
 
-      // Prepare current message parts
-      const currentParts: any[] = [];
+          const existingAccountsSummary = accounts.map((a: any) => ({
+            id: a.id,
+            name: a.name,
+            type: a.type
+          }));
 
-      if (attachment && attachment.base64) {
-        const base64Data = attachment.base64.replace(/^data:[^;]+;base64,/, '');
-        currentParts.push({
-          inlineData: {
-            mimeType: attachment.type || 'image/jpeg',
-            data: base64Data
-          }
-        });
-      }
+          parts.push({
+            text: `Transaction description from treasurer:
+"${cleanPrompt || 'Please scan and extract accounting voucher details from this uploaded bill/receipt.'}"
 
-      currentParts.push({
-        text: prompt || 'Please analyze this uploaded document and explain the debit account, credit account, amount, and narration for recording into the ledger.'
-      });
+Current active Chart of Accounts in ledger:
+${JSON.stringify(existingAccountsSummary, null, 2)}
 
-      contents.push({
-        role: 'user',
-        parts: currentParts
-      });
+Today's Date: ${new Date().toISOString().split('T')[0]}`
+          });
 
-      // Configure Thinking Level:
-      // When thinkMode is true (user clicked Think button), activate deep multi-step CA reasoning (HIGH).
-      // When thinkMode is false (Turbo Flash Default), use LOW reasoning for sudden sub-2s responses!
-      const activeThinkingLevel = thinkMode ? ThinkingLevel.HIGH : ThinkingLevel.LOW;
+          const candidateModels = ['gemini-3.1-flash-lite', 'gemini-flash-latest', 'gemini-3.8-flash', 'gemini-2.5-flash'];
 
-      // Primary: gemini-2.5-flash, Fallback: gemini-2.0-flash
-      const candidateModels = ['gemini-2.5-flash', 'gemini-2.0-flash'];
-      let responseData: any = null;
-
-      for (const modelName of candidateModels) {
-        try {
-          const response = await ai.models.generateContent({
-            model: modelName,
-            contents,
-            config: {
-              systemInstruction: systemInstruction,
-              responseMimeType: 'application/json',
-              thinkingConfig: {
-                thinkingLevel: activeThinkingLevel
-              },
-              responseSchema: {
-                type: Type.OBJECT,
-                properties: {
-                  reply: { type: Type.STRING, description: 'Short, friendly plain-English explanation (no markdown tables).' },
-                  hasSuggestedEntry: { type: Type.BOOLEAN },
-                  suggestedEntry: {
+          for (const modelName of candidateModels) {
+            try {
+              const response = await ai.models.generateContent({
+                model: modelName,
+                contents: { parts },
+                config: {
+                  systemInstruction,
+                  responseMimeType: 'application/json',
+                  responseSchema: {
                     type: Type.OBJECT,
                     properties: {
+                      understood: { type: Type.BOOLEAN },
                       isCompound: { type: Type.BOOLEAN },
+                      date: { type: Type.STRING },
+                      totalAmount: { type: Type.NUMBER },
                       debits: {
                         type: Type.ARRAY,
                         items: {
@@ -401,7 +317,8 @@ ${JSON.stringify(accounts.map((a: any) => ({ id: a.id, name: a.name, type: a.typ
                             accountType: { type: Type.STRING },
                             amount: { type: Type.NUMBER },
                             isNewAccount: { type: Type.BOOLEAN }
-                          }
+                          },
+                          required: ['accountName', 'accountType', 'amount', 'isNewAccount']
                         }
                       },
                       credits: {
@@ -414,560 +331,390 @@ ${JSON.stringify(accounts.map((a: any) => ({ id: a.id, name: a.name, type: a.typ
                             accountType: { type: Type.STRING },
                             amount: { type: Type.NUMBER },
                             isNewAccount: { type: Type.BOOLEAN }
-                          }
+                          },
+                          required: ['accountName', 'accountType', 'amount', 'isNewAccount']
                         }
                       },
-                      amount: { type: Type.NUMBER, description: 'Total balanced transaction amount' },
                       narration: { type: Type.STRING },
-                      date: { type: Type.STRING }
-                    }
-                  },
-                  followUpSuggestions: { type: Type.ARRAY, items: { type: Type.STRING } },
-                  thinkingProcess: { type: Type.STRING },
-                  memoryToSave: { type: Type.STRING }
-                },
-                required: ['reply', 'hasSuggestedEntry']
+                      simpleExplanation: { type: Type.STRING },
+                      missingFields: {
+                        type: Type.ARRAY,
+                        items: { type: Type.STRING }
+                      }
+                    },
+                    required: ['understood', 'isCompound', 'totalAmount', 'debits', 'credits', 'narration', 'simpleExplanation', 'missingFields']
+                  }
+                }
+              });
+
+              const text = response.text || '{}';
+              parsedResult = JSON.parse(text.trim());
+              if (parsedResult && typeof parsedResult === 'object') {
+                break;
               }
-            }
-          });
-          const responseText = response.text || '{}';
-          let parsed: any;
-          try {
-            parsed = JSON.parse(responseText.trim());
-          } catch {
-            const jsonMatch = responseText.match(/\{[\s\S]*\}/);
-            if (jsonMatch) {
-              parsed = JSON.parse(jsonMatch[0]);
-            } else {
-              parsed = {
-                reply: responseText,
-                hasSuggestedEntry: false
-              };
+            } catch (err: any) {
+              console.log(`[AI Auto-Fill] Model ${modelName} error:`, err?.message || err);
             }
           }
-
-          if (parsed && typeof parsed === 'object' && parsed.reply && typeof parsed.reply === 'string' && parsed.reply.trim().length > 0) {
-            if (isGreetingOrGeneralChat(prompt)) {
-              parsed.hasSuggestedEntry = false;
-              parsed.suggestedEntry = null;
-            }
-            responseData = parsed;
-            break;
-          }
-        } catch (modelErr: any) {
-          console.log(`[AI Info] Chat on ${modelName} busy or unavailable. Trying fast switch...`);
-          // Quick failover without long sleep so the user experiences sudden responses
-          break;
-        }
-
-        if (responseData) {
-          break; // Successfully got response
+        } catch (genErr) {
+          console.error('[AI Auto-Fill] Gemini SDK error:', genErr);
         }
       }
 
-      // If all candidate AI models experienced temporary 503/429 spikes, fallback smoothly to the local smart accounting engine!
-      if (!responseData) {
-        console.log('Activating Smart Offline Accounting Engine fallback for prompt...');
-        responseData = generateOfflineAccountingResponse(prompt, history, accounts, financialMetrics);
+      // If Gemini did not return a valid result, execute the deterministic smart accounting parser
+      if (!parsedResult || !parsedResult.understood) {
+        parsedResult = executeOfflineAccountingBrain(cleanPrompt, accounts);
       }
 
-      return res.json(responseData);
-    } catch (err: any) {
-      console.error('Gemini chat assistant error:', err);
-      // Even in the unlikely event of an unhandled outer exception, fall back safely
-      try {
-        const fallback = generateOfflineAccountingResponse(req.body?.prompt || '', req.body?.history || [], req.body?.context?.accounts || [], req.body?.context?.financialMetrics || {});
-        return res.json(fallback);
-      } catch {
-        return res.status(500).json({
-          error: err.message || 'Failure communicating with AI Assistant. Please try again in a moment.'
+      // Map account IDs for existing accounts if missing from model output
+      if (parsedResult && Array.isArray(parsedResult.debits)) {
+        parsedResult.debits = parsedResult.debits.map((d: any) => {
+          const matched = accounts.find((a: any) => 
+            a.name.toLowerCase() === d.accountName.toLowerCase() ||
+            (d.accountId && a.id === d.accountId)
+          );
+          return {
+            ...d,
+            accountId: matched ? matched.id : (d.accountId || ''),
+            isNewAccount: matched ? false : Boolean(d.isNewAccount)
+          };
         });
       }
+
+      if (parsedResult && Array.isArray(parsedResult.credits)) {
+        parsedResult.credits = parsedResult.credits.map((c: any) => {
+          const matched = accounts.find((a: any) => 
+            a.name.toLowerCase() === c.accountName.toLowerCase() ||
+            (c.accountId && a.id === c.accountId)
+          );
+          return {
+            ...c,
+            accountId: matched ? matched.id : (c.accountId || ''),
+            isNewAccount: matched ? false : Boolean(c.isNewAccount)
+          };
+        });
+      }
+
+      return res.json(parsedResult);
+    } catch (err: any) {
+      console.error('Fatal Auto-Fill Error:', err);
+      return res.status(500).json({
+        error: 'Failed to process transaction description.',
+        details: err?.message
+      });
     }
   });
 
-  // Helper to strictly detect casual greetings, questions, or general chat
-  function isGreetingOrGeneralChat(userPrompt: string): boolean {
-    const p = (userPrompt || '').trim().toLowerCase();
-    if (!p) return true;
-    const greetingMatches = [
-      'hi', 'hello', 'hey', 'heyy', 'hiya', 'hola', 'namaste', 'halo',
-      'good morning', 'good afternoon', 'good evening', 'good day', 'greetings',
-      'who are you', 'who r u', 'what are you', 'what can you do', 'how can you help',
-      'help', 'start', 'ping', 'sup', 'yo', 'how are you', 'how r u', 'thanks', 'thank you'
-    ];
-    if (greetingMatches.includes(p)) return true;
-    if (p.length <= 40 && /^(hi|hello|hey|greetings|good\s*(morning|afternoon|evening)|thanks|thank\s*you|how\s*are\s*you|what\s*can\s*you\s*do|who\s*are\s*you)\b/i.test(p) && !/\d|₹|rs|spent|paid|received|purchased|bought|audit|entry|debit|credit/i.test(p)) {
-      return true;
+  // =========================================================================
+  // NADA SMART AI ASSISTANT: Ledger Health Check
+  // =========================================================================
+  app.post('/api/gemini/ledger-health', async (req, res) => {
+    try {
+      const { accounts = [], entries = [], students = [] } = req.body;
+
+      let cashBal = 0;
+      let bankBal = 0;
+      let totalDr = 0;
+      let totalCr = 0;
+
+      const cashAcc = accounts.find((a: any) => a.id === '1' || a.name.toLowerCase().includes('cash')) || accounts[0];
+      const bankAcc = accounts.find((a: any) => a.id === '2' || a.name.toLowerCase().includes('bank')) || accounts[1];
+
+      for (const e of entries) {
+        if (e.isCompound && Array.isArray(e.debits) && Array.isArray(e.credits)) {
+          for (const d of e.debits) {
+            totalDr += Number(d.amount || 0);
+            if (cashAcc && d.accountId === cashAcc.id) cashBal += Number(d.amount || 0);
+            if (bankAcc && d.accountId === bankAcc.id) bankBal += Number(d.amount || 0);
+          }
+          for (const c of e.credits) {
+            totalCr += Number(c.amount || 0);
+            if (cashAcc && c.accountId === cashAcc.id) cashBal -= Number(c.amount || 0);
+            if (bankAcc && c.accountId === bankAcc.id) bankBal -= Number(c.amount || 0);
+          }
+        } else {
+          const amt = Number(e.amount || 0);
+          totalDr += amt;
+          totalCr += amt;
+          if (cashAcc && e.debitAccount === cashAcc.id) cashBal += amt;
+          if (cashAcc && e.creditAccount === cashAcc.id) cashBal -= amt;
+          if (bankAcc && e.debitAccount === bankAcc.id) bankBal += amt;
+          if (bankAcc && e.creditAccount === bankAcc.id) bankBal -= amt;
+        }
+      }
+
+      const isBalanced = Math.abs(totalDr - totalCr) < 0.05;
+      const hasNegativeCash = cashBal < 0;
+      const totalLiquid = cashBal + bankBal;
+
+      const healthBullets: string[] = [];
+
+      if (isBalanced) {
+        healthBullets.push(`✅ Perfect Double-Entry balance: Total debits (₹${Math.round(totalDr).toLocaleString('en-IN')}) exactly equal credits.`);
+      } else {
+        healthBullets.push(`⚠️ Imbalance alert: Debits and credits diverge by ₹${Math.abs(totalDr - totalCr).toFixed(2)}.`);
+      }
+
+      if (hasNegativeCash) {
+        healthBullets.push(`⚠️ Cash Drawer Deficit: Cash in hand is ₹${cashBal.toLocaleString('en-IN')}. Verify if missing cash deposits or member advances need to be recorded.`);
+      } else {
+        healthBullets.push(`💵 Liquid Cash Reserve: You have ₹${cashBal.toLocaleString('en-IN')} cash in drawer and ₹${bankBal.toLocaleString('en-IN')} in bank account (Total: ₹${totalLiquid.toLocaleString('en-IN')}).`);
+      }
+
+      healthBullets.push(`📑 Total Transactions: ${entries.length} vouchers recorded in the ledger and verified against chart of accounts.`);
+
+      return res.json({
+        status: !hasNegativeCash && isBalanced ? 'HEALTHY' : 'ATTENTION_NEEDED',
+        cashBalance: cashBal,
+        bankBalance: bankBal,
+        totalLiquid,
+        isBalanced,
+        bullets: healthBullets,
+        summary: !hasNegativeCash && isBalanced 
+          ? 'Your NADA Union Ledger is in healthy order. All entries balance and liquid reserves are positive.'
+          : 'Review recommended: Check cash balances or unsettled vouchers.'
+      });
+    } catch (err: any) {
+      console.error('Ledger Health Error:', err);
+      return res.status(500).json({ error: 'Failed to compute ledger health.' });
     }
-    return false;
-  }
+  });
 
-  // Sudden / Instant Conversational Response Engine (Sub-15ms execution)
-  function getInstantConversationalResponse(userPrompt: string, context: any) {
-    const p = (userPrompt || '').trim().toLowerCase();
-    if (!p) return null;
-
-    const metrics = context?.financialMetrics || {};
-    const cashStr = metrics.cashBalance ? `₹${Number(metrics.cashBalance).toLocaleString('en-IN')}` : '₹0';
-    const bankStr = metrics.bankBalance ? `₹${Number(metrics.bankBalance).toLocaleString('en-IN')}` : '₹0';
-    const surplusNum = Number(metrics.netSurplus || 0);
-    const surplusStr = `₹${Math.abs(surplusNum).toLocaleString('en-IN')} ${surplusNum >= 0 ? '(Surplus)' : '(Deficit)'}`;
-    const totalEntries = context?.entriesSummary?.totalEntries ?? 0;
-    const orgName = 'NADA UNION LEDGER';
-
-    // 1. Greetings & Introductions
-    if (isGreetingOrGeneralChat(p)) {
-      return {
-        reply: `Hello! I'm your NADA Union CA assistant. How can I help you record or check your union ledger today?`,
-        hasSuggestedEntry: false,
-        suggestedEntry: null,
-        followUpSuggestions: [
-          "Record a new expense",
-          "Check cash balance",
-          "Help with dues"
-        ]
-      };
-    }
-
-    // 2. Thank you / Appreciation
-    if (/^(thank you|thanks|thx|thank you so much|great|awesome|perfect|done|ok|okay|got it)\b/i.test(p) && p.length < 25) {
-      return {
-        reply: `You're very welcome! As your Senior CA and Chief Financial Advisor for **NADA UNION LEDGER**, I'm here to ensure your union ledger remains 100% balanced, audit-ready, and transparent under the Golden Rules of Accounting. Let me know whenever you have more vouchers to record or balances to review!`,
-        hasSuggestedEntry: false,
-        suggestedEntry: null,
-        followUpSuggestions: [
-          "📊 Show Balance Sheet Summary",
-          "📝 Record New Expense",
-          "🔍 Verify Cash Vouchers"
-        ]
-      };
-    }
-
-    // 3. Quick Balances & Financial Position
-    if (/^(what is our balance|what are our balances|show balances|check balance|how much cash do we have|how much money do we have|current balance|financial status|cash balance|bank balance|show ledger status|balance inquiry)$/i.test(p)) {
-      return {
-        reply: `### 📊 Live Financial Position & Balances\n\nHere is the certified balance summary of **NADA UNION LEDGER** as of today:\n\n| Account / Metric | Live Balance | Status |\n| :--- | :--- | :--- |\n| **💵 Cash in Hand** | **${cashStr}** | ${Number(metrics.cashBalance || 0) < 0 ? '⚠️ Deficit Alert' : '✅ Active'} |\n| **💳 Union Bank Account** | **${bankStr}** | ✅ Reconciled |\n| **📈 Net Position** | **${surplusStr}** | ${surplusNum >= 0 ? '✅ Healthy Surplus' : '⚠️ Net Deficit'} |\n| **📑 Total Entries** | **${totalEntries} recorded** | Verified |\n\n*CA Note: Both real accounts (Cash and Bank) are ready for new transactions.*`,
-        hasSuggestedEntry: false,
-        followUpSuggestions: [
-          "💵 Record Cash Outflow",
-          "💳 Record Bank Outflow",
-          "🔍 Perform Full Audit"
-        ]
-      };
-    }
-
-    // 4. Quick CA Forensic Audit request
-    if (/^(audit|audit ledger|audit the ledger|perform audit|check consistency|run audit)$/i.test(p)) {
-      const isCashDeficit = Number(metrics.cashBalance || 0) < 0;
-      return {
-        reply: `### 🔍 Gemini AI — Forensic CA Ledger Audit\n\nI have conducted an immediate audit check on the **NADA UNION LEDGER**:\n\n* **1. Double-Entry Invariance:** All debits and credits maintain mathematical parity across active vouchers.\n* **2. Liquid Asset Integrity:** Cash in Hand is **${cashStr}** and Union Bank Account is **${bankStr}**.\n* **3. Deficit Risk Assessment:** ${isCashDeficit ? '⚠️ **Cash in Hand is in a negative balance.** Ensure missing cash vouchers or member advance recoveries are entered.' : '✅ **No negative cash traps detected.** Liquid balances are healthy.'}\n* **4. Voucher Documentation:** ${totalEntries} entries currently logged in the ledger.\n\n*Status:* Ledger is in good order. Ready to record fresh transactions or adjust existing vouchers.`,
-        thinkingProcess: `1. Forensic Scan: Computed total debit & credit equivalence across all ${totalEntries} entries.\n2. Liquid Reserve Check: Cash in Hand (${cashStr}) + Union Bank Account (${bankStr}).\n3. Deficit Risk Analysis: ${isCashDeficit ? 'Critical: Cash in hand is negative. Requires immediate audit rectification.' : 'Safe: Zero negative liquid cash exposure detected.'}\n4. Golden Rule Adherence: Nominal expense/income items validated against asset movements.`,
-        hasSuggestedEntry: false,
-        followUpSuggestions: [
-          "📝 Record New Transaction",
-          "💵 Reconcile Cash in Hand",
-          "💳 Verify Bank Account"
-        ]
-      };
-    }
-
-    // 5. Memory Commands (Remember / Memorize directives)
-    const rememberMatch = p.match(/^(?:remember\s+(?:that|this)?|memorize\s+(?:that|this)?|save\s+rule:?)\s*(.+)/i);
-    if (rememberMatch && rememberMatch[1]) {
-      const ruleText = rememberMatch[1].trim();
-      return {
-        reply: `### 🧠 Memorized in CA Memory Bank\n\nI have committed this directive into the permanent Union Ledger Memory Bank:\n\n> 📌 **"${ruleText}"**\n\nI will actively apply this rule whenever reviewing future transactions, vendor vouchers, or ledger entries.`,
-        thinkingProcess: `1. Memory Extraction: Captured treasurer directive "${ruleText}".\n2. Storage Protocol: Appended to persistent Memory Bank.\n3. Knowledge Graph: Updated accounting rules context for subsequent journal suggestions.`,
-        hasSuggestedEntry: false,
-        memoryToSave: ruleText,
-        followUpSuggestions: [
-          "📋 View All Memorized Rules",
-          "📝 Test with a Transaction",
-          "💡 CA Advisory"
-        ]
-      };
-    }
-
-    // 6. View Memorized Rules
-    if (/^(what do you remember|show memories|show memory bank|list memories|memory bank|view rules|memorized rules)$/i.test(p)) {
-      const memoriesList: string[] = Array.isArray(context?.memories) ? context.memories : [];
-      const memDisplay = memoriesList.length > 0
-        ? memoriesList.map((m: string, i: number) => `${i + 1}. 📌 **${m}**`).join('\n')
-        : '_No custom rules memorized yet. Tell me "Remember that [rule]" to store custom preferences!_';
-
-      return {
-        reply: `### 🧠 CA Long-Term Memory Bank\n\nHere are the custom directives and preferences I am currently retaining for **NADA UNION LEDGER**:\n\n${memDisplay}\n\n*To teach me a new rule, simply say: "Remember that [your rule]" or click the Memory Bank tool.*`,
-        thinkingProcess: `1. Memory Retrieval: Scanned persistent Memory Bank (${memoriesList.length} active directives).\n2. Policy Check: Validated active accounting overrides and vendor classification rules.`,
-        hasSuggestedEntry: false,
-        followUpSuggestions: [
-          "🧠 Add New Rule",
-          "🔍 Audit Ledger",
-          "💵 Check Balances"
-        ]
-      };
-    }
-
-    // 7. Cash Runway & Burn Rate Analysis
-    if (/^(cash runway|runway|burn rate|how many days can we survive|cash flow forecast|how long will funds last)$/i.test(p)) {
-      const totalLiquid = (Number(metrics.cashBalance) || 0) + (Number(metrics.bankBalance) || 0);
-      const estMonthlyBurn = Math.max(5000, Math.abs(Number(metrics.netSurplus || 0)) / 3);
-      const daysRunway = totalLiquid > 0 ? Math.round((totalLiquid / estMonthlyBurn) * 30) : 0;
-
-      return {
-        reply: `### 💡 Cash Runway & Liquidity Assessment\n\n* **Total Liquid Reserves:** ₹${totalLiquid.toLocaleString('en-IN')} (Cash + Bank)\n* **Estimated Operating Runway:** **~${daysRunway} days** at current spending patterns\n* **CA Financial Health:** ${totalLiquid > 10000 ? '🟢 Strong Liquidity Buffer' : '🟡 Low Cash Buffer — Prioritize membership fee or sponsorship collections'}\n\n*Clever CA Tip: Set aside a reserve fund in the Union Bank Account specifically for upcoming annual festivals or symposiums.*`,
-        thinkingProcess: `1. Reserve Sum: Cash in Hand + Bank Account = ₹${totalLiquid}.\n2. Expense Velocity: Evaluated historical voucher rate against current surplus.\n3. Risk Projection: Estimated ~${daysRunway} days before liquidity requires replenishment.`,
-        hasSuggestedEntry: false,
-        followUpSuggestions: [
-          "📊 Show Full Financial Health",
-          "💵 Check Cash in Hand",
-          "📝 Record Membership Dues"
-        ]
-      };
-    }
-
-    return null;
-  }
-
-  // Smart Offline Accounting Engine for resilience during high upstream AI demand
-  function generateOfflineAccountingResponse(userPrompt: string, msgHistory: any[] = [], accList: any[] = [], metrics: any = {}) {
-    const p = (userPrompt || '').trim();
-    
-    // Check if greeting or intro
-    const instantCheck = getInstantConversationalResponse(p, { financialMetrics: metrics, accounts: accList });
-    if (instantCheck) return instantCheck;
-
-    // Combine text across recent messages for multi-turn clarification context
-    const recentHistoryText = Array.isArray(msgHistory)
-      ? msgHistory.slice(-6).map((m: any) => m.text || '').join(' ')
-      : '';
-    const combinedText = `${recentHistoryText} ${p}`;
-    const lower = p.toLowerCase();
-    const combinedLower = combinedText.toLowerCase();
-
-    // Extract amount from latest prompt, or fallback to recent history
-    let amount = 0;
-    const extractAmt = (txt: string) => {
-      const amtMatch = txt.match(/(?:rs\.?|inr|₹)\s*([\d,]+(?:\.\d+)?)/i) ||
-                       txt.match(/([\d,]+(?:\.\d+)?)\s*(?:rs|rupees|bucks|inr)/i) ||
-                       txt.match(/(?:amount|total|sum|for|of)\s*(?:is|:)?\s*₹?\s*([\d,]+(?:\.\d+)?)/i) ||
-                       txt.match(/\b(\d{2,7}(?:\.\d+)?)\b/);
-      return (amtMatch && amtMatch[1]) ? parseFloat(amtMatch[1].replace(/,/g, '')) : 0;
-    };
-
-    amount = extractAmt(p) || extractAmt(recentHistoryText);
-
-    // Detect payment mode (Must be explicitly specified)
-    const isHardCash = /\b(cash|in hand|hard cash|currency|petty cash|hand|💵)\b/i.test(combinedLower);
-    const isSoftPayment = /\b(bank|online|upi|gpay|google pay|phonepe|paytm|transfer|cheque|neft|rtgs|card|netbanking|soft payment|💳)\b/i.test(combinedLower);
-    const hasExplicitPaymentMode = isHardCash || isSoftPayment;
-
-    // Detect Transaction Nature:
-    // 1. Contra Rule:
-    const isContra = /\b(withdrew|withdraw|withdrawn|deposited|deposit)\b/i.test(combinedLower) &&
-                     /\b(cash|hand)\b/i.test(combinedLower) &&
-                     /\b(bank)\b/i.test(combinedLower);
-
-    // 2. Capitalization Rule (Permanent gear: mic, sound system, speaker, sports kit, furniture)
-    const isCapitalAsset = /\b(mic|mics|wireless mic|microphone|microphones|speaker|speakers|sound system|amplifier|audio set|projector|printer|camera|furniture|table|tables|chair|chairs|sports kit|cricket kit|football kit)\b/i.test(combinedLower);
-
-    // 3. Student Dues / Income
-    const isIncome = !isContra && (
-      /\b(dues|membership|donation|donated|received|grant|sponsor|sponsorship|contribution|collected|fee|ticket sales|income|🎁)\b/i.test(combinedLower) &&
-      !/\b(paid for donation|refund)\b/i.test(combinedLower)
-    );
-
-    // 4. Revenue Expense
-    const isExpense = !isContra && !isCapitalAsset && !isIncome && (
-      /\b(spent|paid|bought|purchase|purchased|cost|fee|printing|refreshment|food|samosa|samosas|tea|coffee|travel|rent|banner|trophy|bill|expense)\b/i.test(combinedLower)
-    );
-
-    // If no transaction intent detected and amount is 0, give helpful CA guidance
-    if (!isIncome && !isExpense && !isCapitalAsset && !isContra && amount <= 0) {
-      return {
-        reply: `### 💡 Gemini AI — Senior CA & Chief Financial Advisor\n\nI am your resident Chartered Accountant for **NADA UNION LEDGER**.\n\nTo prepare an audit-compliant journal entry, simply provide the transaction details in natural language, for example:\n* *"Paid 450 cash for tea and samosas for meeting"*\n* *"Received 3000 dues from batch via Google Pay"*\n* *"Purchased 2 wireless mic sets for 5500 from bank"*\n* *"Withdrew 2000 from bank for cash"*\n\nYou can also click the **+** button to attach receipts or bills for automated scanning!`,
-        hasSuggestedEntry: false,
-        followUpSuggestions: [
-          "☕ Paid 450 cash for tea & samosas",
-          "🎓 Received 3000 dues via Google Pay",
-          "🎤 Purchased 2 wireless mic sets for 5500 from bank",
-          "📊 CA Financial Health Review"
-        ]
-      };
-    }
-
-    // If amount is missing, ask for amount clarification
-    if (amount <= 0) {
-      return {
-        reply: `Please clarify the transaction details to record this entry:\n\n- **Amount:** What was the total amount in INR (₹)?\n- **Payment Mode:** Was this paid/received in **Cash in Hand** or **Union Bank Account / UPI**?`,
-        hasSuggestedEntry: false,
-        followUpSuggestions: [
-          "₹450 via Cash",
-          "₹3,000 via Google Pay",
-          "₹5,500 via Bank",
-          "📊 Show Financial Metrics"
-        ]
-      };
-    }
-
-    const isHardCashMode = isSoftPayment ? false : true;
-    const cashAcc = accList.find((a: any) => a.id === '1' || a.name.toLowerCase().includes('cash')) || { id: '1', name: 'Cash in Hand', type: 'Asset' };
-    const bankAcc = accList.find((a: any) => a.id === '2' || a.name.toLowerCase().includes('bank')) || { id: '2', name: 'Union Bank Account', type: 'Asset' };
-    const selectedLiquidAcc = isHardCashMode ? cashAcc : bankAcc;
-    const paymentMethodDisplay = isHardCashMode ? 'Cash in Hand' : 'Union Bank Account';
-
+  // =========================================================================
+  // DETERMINISTIC SMART ACCOUNTING BRAIN (Zero-fail fallback)
+  // =========================================================================
+  function executeOfflineAccountingBrain(prompt: string, accounts: any[]) {
+    const raw = (prompt || '').trim();
+    const lower = raw.toLowerCase();
     const today = new Date().toISOString().split('T')[0];
 
-    // CASE 1: CONTRA TRANSFER
-    if (isContra) {
-      const isWithdrawing = /\b(withdrew|withdraw|withdrawn)\b/i.test(combinedLower);
-      const debitAcc = isWithdrawing ? cashAcc : bankAcc;
-      const creditAcc = isWithdrawing ? bankAcc : cashAcc;
-      const purposeDesc = isWithdrawing
-        ? 'Cash withdrawn from Union Bank Account to establish Cash in Hand'
-        : 'Cash in Hand deposited into Union Bank Account';
-      const narration = `Being amount of ₹${amount.toLocaleString('en-IN')} ${purposeDesc.toLowerCase()}.`;
+    // Find core liquid accounts
+    const cashAcc = accounts.find((a: any) => a.id === '1' || a.name.toLowerCase().includes('cash')) || { id: '1', name: 'Cash in Hand', type: 'Asset' };
+    const bankAcc = accounts.find((a: any) => a.id === '2' || a.name.toLowerCase().includes('bank')) || { id: '2', name: 'Union Bank Account', type: 'Asset' };
+    const foodAcc = accounts.find((a: any) => a.name.toLowerCase().includes('food') || a.name.toLowerCase().includes('refreshment') || a.id === '7') || { id: '7', name: 'Food & Refreshments', type: 'Expense' };
+    const printAcc = accounts.find((a: any) => a.name.toLowerCase().includes('print') || a.name.toLowerCase().includes('stationery') || a.id === '8') || { id: '8', name: 'Printing & Stationery', type: 'Expense' };
+    const duesAcc = accounts.find((a: any) => a.name.toLowerCase().includes('dues') || a.name.toLowerCase().includes('fee') || a.id === '4') || { id: '4', name: 'Membership Fees', type: 'Income' };
+
+    // Extract amounts (handling glued strings like "100as cash" or "500 for tea: 200 cash, 300 upi")
+    const numMatches = Array.from(raw.matchAll(/(?:₹|rs\.?|inr)?\s*(\d+(?:\.\d+)?)\s*(?:as|for|cash|bank|upi|gpay|rs|rupees)?/gi));
+    const extractedNumbers: number[] = [];
+    for (const m of numMatches) {
+      const val = parseFloat(m[1]);
+      if (!isNaN(val) && val > 0 && !extractedNumbers.includes(val)) {
+        extractedNumbers.push(val);
+      }
+    }
+
+    // Check for compound/split pattern like "Paid 500 for tea: 200 cash, 300 UPI"
+    const splitMatch = raw.match(/(\d+)\s*(?:in|as|via)?\s*cash.*?(\d+)\s*(?:in|as|via)?\s*(?:bank|upi|gpay|online)/i) ||
+                       raw.match(/(\d+)\s*(?:in|as|via)?\s*(?:bank|upi|gpay|online).*?(\d+)\s*(?:in|as|via)?\s*cash/i);
+
+    if (splitMatch) {
+      const cashAmt = parseFloat(splitMatch[1]);
+      const bankAmt = parseFloat(splitMatch[2]);
+      const total = cashAmt + bankAmt;
 
       return {
-        reply: `### Transaction Understood
-* **Date:** ${today}
-* **Amount:** ₹${amount.toLocaleString('en-IN')}
-* **Nature:** Contra
-* **Payment method:** ${paymentMethodDisplay}
-* **Purpose:** ${purposeDesc}
-
-### Suggested Journal Entry
-| Account | Debit (Dr) | Credit (Cr) |
-| :--- | ---: | ---: |
-| **${debitAcc.name}** | ₹${amount.toLocaleString('en-IN')} | - |
-| **${creditAcc.name}** | - | ₹${amount.toLocaleString('en-IN')} |
-
-**Narration:** ${narration}
-
-**CA Accounting Rationale:** Under the Contra Rule, transfers between liquid Real Accounts balance between ${debitAcc.name} (Debit what comes in) and ${creditAcc.name} (Credit what goes out).
-
-**Status:** Suggested — awaiting user confirmation. Is this journal entry correct and should I record it in the Union Ledger?`,
-        hasSuggestedEntry: true,
-        thinkingProcess: `1. Transaction Classification: Contra transfer between liquid Real accounts (${cashAcc.name} and ${bankAcc.name}).\n2. Golden Rule Applied: Real accounts — Debit what comes in (${debitAcc.name}), Credit what goes out (${creditAcc.name}).\n3. Contra Rule: Maintains mathematical balance between Account 1 (Cash) and Account 2 (Bank).\n4. Compliance: Audit narration formatted with standard "Being...".`,
-        suggestedEntry: {
-          debitAccountId: debitAcc.id,
-          debitAccountName: debitAcc.name,
-          debitAccountType: 'Asset',
-          creditAccountId: creditAcc.id,
-          creditAccountName: creditAcc.name,
-          creditAccountType: 'Asset',
-          amount: amount,
-          narration: narration,
-          date: today
-        },
-        followUpSuggestions: [
-          "✅ Yes, record entry",
-          "🔄 Switch Debit / Credit",
-          "✏️ Edit Narration"
-        ]
+        understood: true,
+        isCompound: true,
+        date: today,
+        totalAmount: total,
+        debits: [
+          {
+            accountId: foodAcc.id,
+            accountName: foodAcc.name,
+            accountType: 'Expense',
+            amount: total,
+            isNewAccount: false
+          }
+        ],
+        credits: [
+          {
+            accountId: cashAcc.id,
+            accountName: cashAcc.name,
+            accountType: 'Asset',
+            amount: cashAmt,
+            isNewAccount: false
+          },
+          {
+            accountId: bankAcc.id,
+            accountName: bankAcc.name,
+            accountType: 'Asset',
+            amount: bankAmt,
+            isNewAccount: false
+          }
+        ],
+        narration: `Being ₹${total} paid with ₹${cashAmt} cash and ₹${bankAmt} via bank/UPI.`,
+        simpleExplanation: `We recorded ₹${total} for expenses, paid partly with ₹${cashAmt} from cash drawer and ₹${bankAmt} through bank/UPI.`,
+        missingFields: []
       };
     }
 
-    // CASE 2: CAPITAL ASSET (Capitalization Rule)
-    if (isCapitalAsset) {
-      let assetAccName = 'Equipment / Sound Systems';
-      let assetAccId = 'acc_equip';
+    // RULE 2: LOANS, CREDIT & ADVANCES FROM PEOPLE
+    // Example: "Muhsin gave 100 as cash for credit to union" or "muhsin paid to union 100as cash for credit"
+    const isCreditOrLoanInflow = /(?:as\s*credit|for\s*credit|on\s*credit|as\s*loan|advance|to\s*be\s*paid\s*back)/i.test(lower) &&
+                                 !/(?:returned|repaid|paid\s*back)/i.test(lower);
 
-      const existingEquip = accList.find((a: any) =>
-        a.type === 'Asset' && (a.name.toLowerCase().includes('equipment') || a.name.toLowerCase().includes('sound'))
-      );
-      if (existingEquip) {
-        assetAccName = existingEquip.name;
-        assetAccId = existingEquip.id;
+    if (isCreditOrLoanInflow) {
+      // Extract person name (e.g. Muhsin)
+      let personName = 'Member';
+      const nameMatch = raw.match(/^([A-Za-z]+)\s+(?:paid|gave|transferred|lent|contributed)/i) ||
+                        raw.match(/(?:from|by)\s+([A-Za-z]+)/i);
+      if (nameMatch && nameMatch[1]) {
+        personName = nameMatch[1].charAt(0).toUpperCase() + nameMatch[1].slice(1).toLowerCase();
       }
 
-      let gearName = 'permanent equipment';
-      if (/mic|microphone/i.test(combinedLower)) gearName = 'wireless mic sets';
-      else if (/speaker|sound system|amplifier/i.test(combinedLower)) gearName = 'sound system gear';
-      else if (/sports|cricket|football/i.test(combinedLower)) gearName = 'sports kit';
-      else if (/furniture|chair|table/i.test(combinedLower)) gearName = 'union furniture';
-
-      const narration = `Being purchase of ${gearName} for ₹${amount.toLocaleString('en-IN')} capitalized as equipment asset via ${paymentMethodDisplay}.`;
+      const amountVal = extractedNumbers[0] || 100;
+      const isBank = /bank|upi|gpay|online/i.test(lower);
+      const debitLiquid = isBank ? bankAcc : cashAcc;
+      const creditAccName = `${personName} (Union Payable)`;
 
       return {
-        reply: `### Transaction Understood
-* **Date:** ${today}
-* **Amount:** ₹${amount.toLocaleString('en-IN')}
-* **Nature:** Capital Asset
-* **Payment method:** ${paymentMethodDisplay}
-* **Purpose:** Purchase of ${gearName}
-
-### Suggested Journal Entry
-| Account | Debit (Dr) | Credit (Cr) |
-| :--- | ---: | ---: |
-| **${assetAccName}** | ₹${amount.toLocaleString('en-IN')} | - |
-| **${selectedLiquidAcc.name}** | - | ₹${amount.toLocaleString('en-IN')} |
-
-**Narration:** ${narration}
-
-**CA Accounting Rationale:** Under the Capitalization Rule, permanent gear (${gearName}) must be recorded as an Asset (Debit what comes in), NOT expensed, and Credit ${selectedLiquidAcc.name} (Real Account: asset outflow).
-
-**Status:** Suggested — awaiting user confirmation. Is this journal entry correct and should I record it in the Union Ledger?`,
-        hasSuggestedEntry: true,
-        thinkingProcess: `1. Capitalization Rule Enforced: Permanent gear (${gearName}) has multi-year utility and must be capitalized under Assets, NOT expensed as a revenue consumable.\n2. Golden Rule Applied: Debit what comes in (${assetAccName} — Real Asset) and Credit what goes out (${selectedLiquidAcc.name} — Real Asset).\n3. Liquidity Verification: Deducted ₹${amount.toLocaleString('en-IN')} from ${selectedLiquidAcc.name}.\n4. CA Audit Safeguard: Balance sheet reflects asset addition rather than distorting surplus.`,
-        suggestedEntry: {
-          debitAccountId: assetAccId,
-          debitAccountName: assetAccName,
-          debitAccountType: 'Asset',
-          creditAccountId: selectedLiquidAcc.id,
-          creditAccountName: selectedLiquidAcc.name,
-          creditAccountType: 'Asset',
-          amount: amount,
-          narration: narration,
-          date: today
-        },
-        followUpSuggestions: [
-          "✅ Yes, record entry",
-          "🔄 Switch between Cash and Bank",
-          "✏️ Edit Narration"
-        ]
+        understood: true,
+        isCompound: false,
+        date: today,
+        totalAmount: amountVal,
+        debits: [
+          {
+            accountId: debitLiquid.id,
+            accountName: debitLiquid.name,
+            accountType: 'Asset',
+            amount: amountVal,
+            isNewAccount: false
+          }
+        ],
+        credits: [
+          {
+            accountId: '',
+            accountName: creditAccName,
+            accountType: 'Liability',
+            amount: amountVal,
+            isNewAccount: true
+          }
+        ],
+        narration: `Being ₹${amountVal} received in ${isBank ? 'bank' : 'cash'} from ${personName} as credit/loan to the union.`,
+        simpleExplanation: `Cash came into the union drawer (Debit ${debitLiquid.name}), and since this is credit from ${personName}, we record that the union owes him ₹${amountVal} (Credit ${creditAccName}).`,
+        missingFields: []
       };
     }
 
-    // CASE 3: STUDENT DUES / INCOME
+    // RULE 3: REPAYING LOANS OR SETTLING CREDIT
+    // Example: "Returned 100 cash to Muhsin"
+    const isRepayingLoan = /(?:returned|repaid|paid\s*back|settled\s*credit|cleared\s*loan)/i.test(lower);
+    if (isRepayingLoan) {
+      let personName = 'Member';
+      const nameMatch = raw.match(/(?:to|for)\s+([A-Za-z]+)/i);
+      if (nameMatch && nameMatch[1]) {
+        personName = nameMatch[1].charAt(0).toUpperCase() + nameMatch[1].slice(1).toLowerCase();
+      }
+
+      const amountVal = extractedNumbers[0] || 100;
+      const isBank = /bank|upi|gpay|online/i.test(lower);
+      const creditLiquid = isBank ? bankAcc : cashAcc;
+      const debitAccName = `${personName} (Union Payable)`;
+
+      return {
+        understood: true,
+        isCompound: false,
+        date: today,
+        totalAmount: amountVal,
+        debits: [
+          {
+            accountId: '',
+            accountName: debitAccName,
+            accountType: 'Liability',
+            amount: amountVal,
+            isNewAccount: false
+          }
+        ],
+        credits: [
+          {
+            accountId: creditLiquid.id,
+            accountName: creditLiquid.name,
+            accountType: 'Asset',
+            amount: amountVal,
+            isNewAccount: false
+          }
+        ],
+        narration: `Being ₹${amountVal} repaid in ${isBank ? 'bank' : 'cash'} to ${personName} settling union credit.`,
+        simpleExplanation: `We paid back ₹${amountVal} in cash to ${personName} (Credit ${creditLiquid.name}), which clears off ₹${amountVal} of what the union owed him (Debit ${debitAccName}).`,
+        missingFields: []
+      };
+    }
+
+    // RULE 5: INCOME & MEMBERSHIP FEES
+    const isIncome = /(?:collected|membership|fees|contribution|donation|received)/i.test(lower) && !/(?:paid|spent)/i.test(lower);
     if (isIncome) {
-      let incomeAccName = 'Donation Account';
-      let incomeAccId = '12';
-
-      if (combinedLower.includes('dues') || combinedLower.includes('membership')) {
-        incomeAccName = 'Membership Contribution Dues';
-        incomeAccId = '4';
-      } else if (combinedLower.includes('sponsor')) {
-        incomeAccName = 'Sponsorship & Program Grants';
-        incomeAccId = '5';
-      } else {
-        const existingDon = accList.find((a: any) => a.name.toLowerCase().includes('donation') || a.id === '12');
-        if (existingDon) {
-          incomeAccName = existingDon.name;
-          incomeAccId = existingDon.id;
-        }
-      }
-
-      const purposeDesc = incomeAccName === 'Membership Contribution Dues'
-        ? 'Batch membership contribution dues'
-        : incomeAccName;
-
-      const narration = `Being amount of ₹${amount.toLocaleString('en-IN')} received towards ${purposeDesc.toLowerCase()} via ${paymentMethodDisplay}.`;
+      const amountVal = extractedNumbers[0] || 0;
+      const isBank = /bank|upi|gpay|online/i.test(lower) || !/cash/i.test(lower);
+      const debitLiquid = isBank ? bankAcc : cashAcc;
 
       return {
-        reply: `### Transaction Understood
-* **Date:** ${today}
-* **Amount:** ₹${amount.toLocaleString('en-IN')}
-* **Nature:** Student Dues / Income
-* **Payment method:** ${paymentMethodDisplay}
-* **Purpose:** ${purposeDesc}
-
-### Suggested Journal Entry
-| Account | Debit (Dr) | Credit (Cr) |
-| :--- | ---: | ---: |
-| **${selectedLiquidAcc.name}** | ₹${amount.toLocaleString('en-IN')} | - |
-| **${incomeAccName}** | - | ₹${amount.toLocaleString('en-IN')} |
-
-**Narration:** ${narration}
-
-**CA Accounting Rationale:** Debit **${selectedLiquidAcc.name}** (Real Account: asset inflow) and Credit **${incomeAccName}** (Nominal Account: all income and gains).
-
-**Status:** Suggested — awaiting user confirmation. Is this journal entry correct and should I record it in the Union Ledger?`,
-        hasSuggestedEntry: true,
-        thinkingProcess: `1. Account Classification: ${incomeAccName} (Nominal Income) and ${selectedLiquidAcc.name} (Real Asset).\n2. Golden Rule Applied: Debit what comes in (${selectedLiquidAcc.name}), Credit all income and gains (${incomeAccName}).\n3. Liquidity Verification: Liquid balance increased by ₹${amount.toLocaleString('en-IN')}.\n4. Audit Standard: Double-entry strictly balanced. Narration compliant.`,
-        suggestedEntry: {
-          debitAccountId: selectedLiquidAcc.id,
-          debitAccountName: selectedLiquidAcc.name,
-          debitAccountType: 'Asset',
-          creditAccountId: incomeAccId,
-          creditAccountName: incomeAccName,
-          creditAccountType: 'Income',
-          amount: amount,
-          narration: narration,
-          date: today
-        },
-        followUpSuggestions: [
-          "✅ Yes, record entry",
-          "🔄 Switch between Cash and Bank",
-          "✏️ Edit Narration"
-        ]
-      };
-    } else {
-      // CASE 4: REVENUE EXPENSE
-      let expenseAccName = 'Food & Refreshments';
-      let expenseAccId = '7';
-      let purposeDesc = 'Tea and refreshments';
-
-      if (combinedLower.includes('food') || combinedLower.includes('snack') || combinedLower.includes('samosa') || combinedLower.includes('tea') || combinedLower.includes('refreshment') || combinedLower.includes('juice') || combinedLower.includes('lunch') || combinedLower.includes('dinner')) {
-        expenseAccName = 'Food & Refreshments';
-        expenseAccId = '7';
-        purposeDesc = 'Tea, samosas and meeting refreshments';
-      } else if (combinedLower.includes('print') || combinedLower.includes('stationery') || combinedLower.includes('paper') || combinedLower.includes('xerox') || combinedLower.includes('book')) {
-        expenseAccName = 'Printing & Stationery';
-        expenseAccId = '8';
-        purposeDesc = 'Printing and stationery supplies';
-      } else if (combinedLower.includes('rent') || combinedLower.includes('stage') || combinedLower.includes('hall') || combinedLower.includes('auditorium') || combinedLower.includes('venue')) {
-        expenseAccName = 'Union Hall / Stage Rent';
-        expenseAccId = '9';
-        purposeDesc = 'Union hall and stage rental';
-      } else if (combinedLower.includes('trophy') || combinedLower.includes('trophies') || combinedLower.includes('banner') || combinedLower.includes('memento') || combinedLower.includes('medal') || combinedLower.includes('prize')) {
-        expenseAccName = 'Trophies & Banners';
-        expenseAccId = '10';
-        purposeDesc = 'Trophies and event banners';
-      } else if (combinedLower.includes('welfare') || combinedLower.includes('charity') || combinedLower.includes('medical') || combinedLower.includes('aid')) {
-        expenseAccName = 'Welfare Grant / Charity';
-        expenseAccId = '11';
-        purposeDesc = 'Student welfare grant and charity aid';
-      } else {
-        const matched = accList.find((a: any) => a.type === 'Expense' && combinedLower.includes(a.name.toLowerCase()));
-        if (matched) {
-          expenseAccName = matched.name;
-          expenseAccId = matched.id;
-          purposeDesc = matched.name;
-        }
-      }
-
-      const narration = `Being amount of ₹${amount.toLocaleString('en-IN')} paid for ${purposeDesc.toLowerCase()} via ${paymentMethodDisplay}.`;
-
-      return {
-        reply: `### Transaction Understood
-* **Date:** ${today}
-* **Amount:** ₹${amount.toLocaleString('en-IN')}
-* **Nature:** Revenue Expense
-* **Payment method:** ${paymentMethodDisplay}
-* **Purpose:** ${purposeDesc}
-
-### Suggested Journal Entry
-| Account | Debit (Dr) | Credit (Cr) |
-| :--- | ---: | ---: |
-| **${expenseAccName}** | ₹${amount.toLocaleString('en-IN')} | - |
-| **${selectedLiquidAcc.name}** | - | ₹${amount.toLocaleString('en-IN')} |
-
-**Narration:** ${narration}
-
-**CA Accounting Rationale:** Debit **${expenseAccName}** (Nominal Account: all expenses and losses) and Credit **${selectedLiquidAcc.name}** (Real Account: asset outflow).
-
-**Status:** Suggested — awaiting user confirmation. Is this journal entry correct and should I record it in the Union Ledger?`,
-        hasSuggestedEntry: true,
-        thinkingProcess: `1. Account Classification: ${expenseAccName} (Nominal Expense) and ${selectedLiquidAcc.name} (Real Asset).\n2. Golden Rule Applied: Debit all expenses and losses (${expenseAccName}), Credit what goes out (${selectedLiquidAcc.name}).\n3. Liquidity Verification: Deducted ₹${amount.toLocaleString('en-IN')} from ${selectedLiquidAcc.name}.\n4. CA Audit Safeguard: Verified operating consumable classification (Revenue Expenditure).`,
-        suggestedEntry: {
-          debitAccountId: expenseAccId,
-          debitAccountName: expenseAccName,
-          debitAccountType: 'Expense',
-          creditAccountId: selectedLiquidAcc.id,
-          creditAccountName: selectedLiquidAcc.name,
-          creditAccountType: 'Asset',
-          amount: amount,
-          narration: narration,
-          date: today
-        },
-        followUpSuggestions: [
-          "✅ Yes, record entry",
-          "🔄 Switch between Cash and Bank",
-          "✏️ Edit Narration"
-        ]
+        understood: true,
+        isCompound: false,
+        date: today,
+        totalAmount: amountVal,
+        debits: [
+          {
+            accountId: debitLiquid.id,
+            accountName: debitLiquid.name,
+            accountType: 'Asset',
+            amount: amountVal,
+            isNewAccount: false
+          }
+        ],
+        credits: [
+          {
+            accountId: duesAcc.id,
+            accountName: duesAcc.name,
+            accountType: 'Income',
+            amount: amountVal,
+            isNewAccount: false
+          }
+        ],
+        narration: `Being ₹${amountVal} collected for membership fees via ${isBank ? 'bank/UPI' : 'cash'}.`,
+        simpleExplanation: `Money came into our ${isBank ? 'bank account' : 'cash drawer'} (Debit ${debitLiquid.name}) from student membership fee collections (Credit ${duesAcc.name}).`,
+        missingFields: amountVal === 0 ? ['amount'] : []
       };
     }
+
+    // RULE 4: EVERYDAY EXPENSES & PURCHASES
+    const isPrinting = /(?:print|banner|poster|stationery|paper)/i.test(lower);
+    const expenseTarget = isPrinting ? printAcc : foodAcc;
+    const amountVal = extractedNumbers[0] || 0;
+    const isBank = /bank|upi|gpay|online/i.test(lower);
+    const creditLiquid = isBank ? bankAcc : cashAcc;
+
+    return {
+      understood: true,
+      isCompound: false,
+      date: today,
+      totalAmount: amountVal,
+      debits: [
+        {
+          accountId: expenseTarget.id,
+          accountName: expenseTarget.name,
+          accountType: 'Expense',
+          amount: amountVal,
+          isNewAccount: false
+        }
+      ],
+      credits: [
+        {
+          accountId: creditLiquid.id,
+          accountName: creditLiquid.name,
+          accountType: 'Asset',
+          amount: amountVal,
+          isNewAccount: false
+        }
+      ],
+      narration: `Being ₹${amountVal} paid for ${expenseTarget.name.toLowerCase()} via ${isBank ? 'bank/UPI' : 'cash'}.`,
+      simpleExplanation: `We recorded an expense for ${expenseTarget.name} (Debit ${expenseTarget.name}), paid out from our ${creditLiquid.name} (Credit ${creditLiquid.name}).`,
+      missingFields: [
+        ...(amountVal === 0 ? ['amount'] : []),
+        ...(!/cash|bank|upi|gpay/i.test(lower) ? ['payment_mode'] : [])
+      ]
+    };
   }
 
   // Vite middleware for dev or static server for production build
