@@ -3,9 +3,11 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { Account, JournalEntry, Student, Program } from '../types';
 import { getAccountBalances, resolveAccountName } from '../utils/accounting';
+import { doc, getDoc, updateDoc, setDoc } from 'firebase/firestore';
+import { db } from '../firebase';
 import { 
   Wallet, 
   Landmark, 
@@ -30,7 +32,9 @@ import {
   Sparkles,
   AlertCircle,
   Download,
-  Upload
+  Upload,
+  Edit2,
+  RotateCcw
 } from 'lucide-react';
 
 interface HomePageProps {
@@ -48,6 +52,7 @@ interface HomePageProps {
   onExportBackup?: () => void;
   onImportBackup?: (content: string) => Promise<boolean> | boolean;
   onAddEntry?: (entry: Omit<JournalEntry, 'id'>) => Promise<boolean>;
+  academicYear?: string;
 }
 
 export function HomePage({
@@ -65,12 +70,106 @@ export function HomePage({
   onExportBackup,
   onImportBackup,
   onAddEntry,
+  academicYear,
 }: HomePageProps) {
   // Modal states
   const [selectedEntryDetails, setSelectedEntryDetails] = useState<JournalEntry | null>(null);
   const [activeMenuEntryId, setActiveMenuEntryId] = useState<string | null>(null);
   const [isTransferModalOpen, setIsTransferModalOpen] = useState(false);
   const [copiedNarrationId, setCopiedNarrationId] = useState<string | null>(null);
+
+  // Editable banner state
+  const [isEditingBanner, setIsEditingBanner] = useState(false);
+  const [bannerGreeting, setBannerGreeting] = useState(() => localStorage.getItem('app_banner_greeting') || '');
+  const [bannerHeadline, setBannerHeadline] = useState(() => localStorage.getItem('app_banner_headline') || "Let's keep our Union finances organized.");
+  const [bannerSub1, setBannerSub1] = useState(() => localStorage.getItem('app_banner_sub1') || 'Transparent Accounts');
+  const [bannerSub2, setBannerSub2] = useState(() => localStorage.getItem('app_banner_sub2') || 'Stronger Communities');
+  const [bannerQuote, setBannerQuote] = useState(() => localStorage.getItem('app_banner_quote') || '"Trust Today A Stronger Tomorrow"');
+  const [isSavingBanner, setIsSavingBanner] = useState(false);
+  const [isBannerSaved, setIsBannerSaved] = useState(false);
+
+  // Load custom banner text from Firestore config
+  useEffect(() => {
+    (async () => {
+      try {
+        const configSnap = await getDoc(doc(db, 'metadata', 'config'));
+        if (configSnap.exists()) {
+          const data = configSnap.data();
+          if (data.bannerHeadline) {
+            setBannerHeadline(data.bannerHeadline);
+            localStorage.setItem('app_banner_headline', data.bannerHeadline);
+          }
+          if (data.bannerGreeting !== undefined) {
+            setBannerGreeting(data.bannerGreeting);
+            localStorage.setItem('app_banner_greeting', data.bannerGreeting);
+          }
+          if (data.bannerSub1) {
+            setBannerSub1(data.bannerSub1);
+            localStorage.setItem('app_banner_sub1', data.bannerSub1);
+          }
+          if (data.bannerSub2) {
+            setBannerSub2(data.bannerSub2);
+            localStorage.setItem('app_banner_sub2', data.bannerSub2);
+          }
+          if (data.bannerQuote) {
+            setBannerQuote(data.bannerQuote);
+            localStorage.setItem('app_banner_quote', data.bannerQuote);
+          }
+        }
+      } catch (e) {
+        console.warn('Banner config load error:', e);
+      }
+    })();
+  }, []);
+
+  // Save updated banner text to Firestore & LocalStorage
+  const handleSaveBanner = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!isEditor) return;
+    setIsSavingBanner(true);
+    try {
+      localStorage.setItem('app_banner_greeting', bannerGreeting);
+      localStorage.setItem('app_banner_headline', bannerHeadline);
+      localStorage.setItem('app_banner_sub1', bannerSub1);
+      localStorage.setItem('app_banner_sub2', bannerSub2);
+      localStorage.setItem('app_banner_quote', bannerQuote);
+
+      const payload = {
+        bannerGreeting: bannerGreeting || '',
+        bannerHeadline: bannerHeadline || "Let's keep our Union finances organized.",
+        bannerSub1: bannerSub1 || 'Transparent Accounts',
+        bannerSub2: bannerSub2 || 'Stronger Communities',
+        bannerQuote: bannerQuote || '"Trust Today A Stronger Tomorrow"',
+      };
+
+      try {
+        await setDoc(doc(db, 'metadata', 'config'), payload, { merge: true });
+      } catch (cloudErr) {
+        console.warn('Banner saved locally; cloud sync notice:', cloudErr);
+      }
+
+      // Show "Saved!" state
+      setIsSavingBanner(false);
+      setIsBannerSaved(true);
+
+      // Keep "Saved!" visible for 1 second, then smoothly close modal
+      setTimeout(() => {
+        setIsBannerSaved(false);
+        setIsEditingBanner(false);
+      }, 1000);
+    } catch (err) {
+      console.error('Failed to save banner config:', err);
+      setIsSavingBanner(false);
+    }
+  };
+  // Reset banner text to original default
+  const handleResetBannerDefaults = () => {
+    setBannerGreeting('');
+    setBannerHeadline("Let's keep our Union finances organized.");
+    setBannerSub1('Transparent Accounts');
+    setBannerSub2('Stronger Communities');
+    setBannerQuote('"Trust Today A Stronger Tomorrow"');
+  };
 
   // Transfer form state
   const [transferFrom, setTransferFrom] = useState<'cash_to_bank' | 'bank_to_cash'>('cash_to_bank');
@@ -107,11 +206,15 @@ export function HomePage({
   const { totalPendingDues, pendingCount } = useMemo(() => {
     let pendingAmt = 0;
     let count = 0;
+    
+    // Filter students and programs by academicYear
+    const filteredStudents = students.filter(s => !s.academicYear || s.academicYear === academicYear);
+    const filteredPrograms = programs.filter(p => !p.academicYear || p.academicYear === academicYear);
 
-    if (programs.length > 0) {
-      programs.forEach(prog => {
+    if (filteredPrograms.length > 0) {
+      filteredPrograms.forEach(prog => {
         const excluded = prog.excludedStudentIds || [];
-        students.forEach(stu => {
+        filteredStudents.forEach(stu => {
           if (excluded.includes(stu.id)) return;
           const due = prog.studentDues?.[stu.id] || { amountPaid: 0, totalDue: prog.defaultAmount, status: 'Pending' };
           const remaining = Math.max(0, due.totalDue - due.amountPaid);
@@ -123,8 +226,8 @@ export function HomePage({
       });
     }
 
-    if (pendingAmt === 0 && students.length > 0) {
-      students.forEach(stu => {
+    if (pendingAmt === 0 && filteredStudents.length > 0) {
+      filteredStudents.forEach(stu => {
         const remaining = Math.max(0, (stu.totalDue || 0) - (stu.amountPaid || 0));
         if (remaining > 0) {
           pendingAmt += remaining;
@@ -134,7 +237,7 @@ export function HomePage({
     }
 
     return { totalPendingDues: pendingAmt, pendingCount: count };
-  }, [programs, students]);
+  }, [programs, students, academicYear]);
 
   // Currency formatter
   const formatAmount = (num: number) => {
@@ -146,15 +249,18 @@ export function HomePage({
     }).format(num);
   };
 
-  // Dynamic greeting based on current local hour
+  // Dynamic greeting based on current local hour (or custom override)
   const greeting = useMemo(() => {
+    if (bannerGreeting && bannerGreeting.trim().length > 0) {
+      return bannerGreeting.trim();
+    }
     const hour = new Date().getHours();
     if (hour < 12) return 'Good Morning,';
     if (hour < 17) return 'Good Afternoon,';
     return 'Good Evening,';
-  }, []);
+  }, [bannerGreeting]);
 
-  // Formatted date (e.g. "Mon, 15 Sep 2026")
+  // Formatted date (e.g. "Wed, 21 Oct 2026")
   const formattedDate = useMemo(() => {
     return new Intl.DateTimeFormat('en-IN', {
       weekday: 'short',
@@ -171,7 +277,7 @@ export function HomePage({
     );
   }, [entries]);
 
-  // Helper for colored account pill badges matching the reference image style
+  // Helper for colored account pill badges
   const getAccountBadgeClass = (accId: string, accType?: string) => {
     const acc = accounts.find(a => a.id === accId);
     const accName = acc?.name || '';
@@ -208,7 +314,6 @@ export function HomePage({
     const amt = parseFloat(transferAmount);
     if (isNaN(amt) || amt <= 0) return;
 
-    // Cash is account '1', Bank is account '2'
     const debitAcc = transferFrom === 'cash_to_bank' ? '2' : '1';
     const creditAcc = transferFrom === 'cash_to_bank' ? '1' : '2';
 
@@ -295,9 +400,22 @@ export function HomePage({
   return (
     <div className="space-y-5 sm:space-y-6 animate-in fade-in duration-200">
       
-      {/* 🌟 1. HERO BANNER - Soft blue gradient with elegant architectural silhouette */}
-      <div className="relative rounded-3xl p-5 sm:p-7 shadow-xs overflow-hidden bg-gradient-to-r from-[#D7EEFA] via-[#EAF4FC] to-[#EDE8FD] border border-sky-200/70">
+      {/* 🌟 1. HERO BANNER - Soft blue gradient with editable contents */}
+      <div className="relative rounded-3xl p-5 sm:p-7 shadow-xs overflow-hidden bg-gradient-to-r from-[#D7EEFA] via-[#EAF4FC] to-[#EDE8FD] border border-sky-200/70 group/banner">
         
+        {/* Admin Edit Pencil Button on Top-Right */}
+        {isEditor && (
+          <button
+            type="button"
+            onClick={() => setIsEditingBanner(true)}
+            className="absolute top-3.5 right-3.5 z-20 w-8 h-8 rounded-xl bg-white/80 hover:bg-white text-slate-600 hover:text-purple-700 flex items-center justify-center shadow-3xs border border-white/60 transition-all cursor-pointer opacity-80 group-hover/banner:opacity-100"
+            title="Edit Welcome Banner Text"
+            aria-label="Edit Welcome Banner"
+          >
+            <Edit2 size={15} />
+          </button>
+        )}
+
         {/* Subtle Architectural Silhouette Background SVG */}
         <div className="absolute right-0 bottom-0 top-0 w-1/2 sm:w-2/5 pointer-events-none opacity-20 flex items-end justify-end overflow-hidden select-none">
           <svg
@@ -306,7 +424,6 @@ export function HomePage({
             fill="currentColor"
             xmlns="http://www.w3.org/2000/svg"
           >
-            {/* Mosque Minarets, Domes and Palms Silhouette */}
             <path d="M260 240V120C260 115 265 110 270 110C275 110 280 115 280 120V240H260Z" />
             <path d="M270 95L265 110H275L270 95Z" />
             <circle cx="270" cy="92" r="3" />
@@ -317,30 +434,27 @@ export function HomePage({
             <circle cx="250" cy="112" r="2.5" />
             <path d="M140 240V195C140 175 155 160 175 160C195 160 210 175 210 195V240H140Z" />
             <path d="M350 240V200C350 185 362 175 378 175C394 175 405 185 405 200V240H350Z" />
-            {/* Palm branch accent */}
             <path d="M80 240Q120 180 110 130Q135 155 125 185Q150 145 130 120Q160 140 140 175Q170 145 150 110Q180 135 160 180Q190 160 180 240Z" opacity="0.6" />
           </svg>
         </div>
 
-        <div className="relative z-10 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <div className="relative z-10 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 pr-7 sm:pr-0">
           <div className="space-y-1.5 max-w-lg">
             <p className="text-xs sm:text-sm font-semibold text-sky-800 tracking-wide">
               {greeting}
             </p>
             <h1 className="text-xl sm:text-2xl lg:text-[26px] font-black text-slate-900 tracking-tight leading-tight">
-              Let's keep our Union finances organized.
+              {bannerHeadline}
             </h1>
-            <p className="text-xs sm:text-[13px] text-slate-600 font-medium pt-0.5 flex items-center gap-2">
-              <span>Transparent Accounts</span>
-              <span className="text-slate-400">•</span>
-              <span>Stronger Communities</span>
-            </p>
           </div>
 
+
           <div className="flex flex-row sm:flex-col items-start sm:items-end justify-between sm:justify-center gap-3 shrink-0">
-            <p className="text-xs sm:text-[13px] font-serif italic text-slate-500/90 text-left sm:text-right leading-tight">
-              "Trust Today<br className="hidden sm:inline" /> A Stronger Tomorrow"
-            </p>
+            {bannerQuote && (
+              <p className="text-xs sm:text-[13px] font-serif italic text-slate-500/90 text-left sm:text-right leading-tight max-w-[200px]">
+                {bannerQuote}
+              </p>
+            )}
 
             <div className="inline-flex items-center gap-2 bg-white/85 backdrop-blur-sm border border-sky-200/80 px-3.5 py-1.5 rounded-xl shadow-2xs text-xs font-semibold text-slate-700 select-none">
               <Calendar size={14} className="text-indigo-600 shrink-0" />
@@ -350,7 +464,141 @@ export function HomePage({
         </div>
       </div>
 
-      {/* 💰 2. FINANCIAL SUMMARY CARDS - 6 Pastel cards exactly as in reference */}
+      {/* ✏️ HERO BANNER EDIT MODAL */}
+      {isEditingBanner && (
+        <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in duration-200">
+          <div className="bg-white rounded-3xl max-w-md w-full shadow-2xl border border-gray-200 overflow-hidden animate-in zoom-in-95 duration-200">
+            <div className="p-5 border-b border-gray-100 flex items-center justify-between bg-gradient-to-r from-sky-50 to-indigo-50/50">
+              <div className="flex items-center gap-2.5">
+                <div className="w-10 h-10 rounded-xl bg-sky-100 text-sky-700 flex items-center justify-center shadow-3xs">
+                  <Edit2 size={18} />
+                </div>
+                <div>
+                  <h3 className="font-bold text-slate-900 text-base">Edit Welcome Banner</h3>
+                  <p className="text-xs text-slate-500">Update the top headline, tagline, and quote</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsEditingBanner(false)}
+                className="w-8 h-8 rounded-full bg-white/80 hover:bg-white text-slate-500 hover:text-slate-800 flex items-center justify-center cursor-pointer transition-colors shadow-3xs"
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveBanner} className="p-5 space-y-3.5 text-left">
+              {/* Custom Greeting (optional) */}
+              <div>
+                <label className="text-xs font-bold text-slate-700 block mb-1">
+                  Greeting (Leave empty for dynamic Good Morning/Evening)
+                </label>
+                <input
+                  type="text"
+                  placeholder="e.g. Welcome back, or As-salamu alaykum,"
+                  value={bannerGreeting}
+                  onChange={(e) => setBannerGreeting(e.target.value)}
+                  className="w-full px-3.5 py-2 border border-gray-200 rounded-xl text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-purple-500/20 focus:border-purple-500"
+                />
+              </div>
+
+              {/* Main Headline */}
+              <div>
+                <label className="text-xs font-bold text-slate-700 block mb-1">
+                  Main Headline *
+                </label>
+                <textarea
+                  rows={2}
+                  required
+                  placeholder="e.g. Let's keep our Union finances organized."
+                  value={bannerHeadline}
+                  onChange={(e) => setBannerHeadline(e.target.value)}
+                  className="w-full px-3.5 py-2 border border-gray-200 rounded-xl text-xs font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-purple-500/20 focus:border-purple-500 leading-snug"
+                />
+              </div>
+
+              {/* Subtitles */}
+              <div className="grid grid-cols-2 gap-2.5">
+                <div>
+                  <label className="text-xs font-bold text-slate-700 block mb-1">
+                    Tagline 1
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="e.g. Transparent Accounts"
+                    value={bannerSub1}
+                    onChange={(e) => setBannerSub1(e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-200 rounded-xl text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-purple-500/20 focus:border-purple-500"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs font-bold text-slate-700 block mb-1">
+                    Tagline 2
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="e.g. Stronger Communities"
+                    value={bannerSub2}
+                    onChange={(e) => setBannerSub2(e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-200 rounded-xl text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-purple-500/20 focus:border-purple-500"
+                  />
+                </div>
+              </div>
+
+              {/* Quote / Motto */}
+              <div>
+                <label className="text-xs font-bold text-slate-700 block mb-1">
+                  Motto / Quote
+                </label>
+                <input
+                  type="text"
+                  placeholder='e.g. "Trust Today A Stronger Tomorrow"'
+                  value={bannerQuote}
+                  onChange={(e) => setBannerQuote(e.target.value)}
+                  className="w-full px-3.5 py-2 border border-gray-200 rounded-xl text-xs font-serif italic text-slate-700 focus:outline-none focus:ring-2 focus:ring-purple-500/20 focus:border-purple-500"
+                />
+              </div>
+
+              <div className="pt-2 flex items-center justify-between border-t border-gray-100">
+                <button
+                  type="button"
+                  onClick={handleResetBannerDefaults}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-slate-500 hover:text-slate-800 rounded-lg hover:bg-slate-100 transition-colors cursor-pointer"
+                  title="Reset to default text"
+                >
+                  <RotateCcw size={13} />
+                  <span>Reset Default</span>
+                </button>
+
+                <div className="flex items-center gap-2">
+                  <button
+  type="submit"
+  disabled={isSavingBanner || isBannerSaved}
+  className={`px-4 py-1.5 rounded-xl text-xs font-bold transition-all shadow-xs cursor-pointer inline-flex items-center gap-1.5 ${
+    isBannerSaved
+      ? 'bg-emerald-600 text-white'
+      : 'bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white disabled:opacity-60'
+  }`}
+>
+  {isBannerSaved ? (
+    <>
+      <Check size={14} className="text-white animate-bounce" />
+      <span>Saved!</span>
+    </>
+  ) : isSavingBanner ? (
+    <span>Saving...</span>
+  ) : (
+    <span>Save Changes</span>
+  )}
+</button>
+                </div>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* 💰 2. FINANCIAL SUMMARY CARDS */}
       <div className="grid grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
         
         {/* Card 1: Cash Balance */}
@@ -522,7 +770,6 @@ export function HomePage({
             <div className="w-10 h-10 sm:w-11 sm:h-11 rounded-xl bg-[#FFE4C4] text-[#EA580C] flex items-center justify-center shrink-0 shadow-2xs group-hover:scale-105 transition-transform">
               <Users size={20} className="sm:w-[22px] sm:h-[22px]" />
             </div>
-            {/* Button removed */}
           </div>
 
           <div className="mt-3">
@@ -540,7 +787,7 @@ export function HomePage({
 
       </div>
 
-      {/* ⚡ 3. QUICK ACTIONS - Record Entry, Review & Save PDF, Backup Ledger, Import Backup */}
+      {/* ⚡ 3. QUICK ACTIONS */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4">
         
         {/* Quick Action 1: Record Entry */}
@@ -613,7 +860,7 @@ export function HomePage({
 
       </div>
 
-      {/* 📖 4. JOURNAL TRANSACTIONS SECTION - Premium card table matching reference */}
+      {/* 📖 4. JOURNAL TRANSACTIONS SECTION */}
       <div className="bg-white border border-gray-200/90 rounded-2xl shadow-xs overflow-hidden">
         
         {/* Section Header */}
@@ -705,13 +952,13 @@ export function HomePage({
                       <td className="py-3 px-3.5 whitespace-nowrap">
                         {entry.isCompound ? (
                           <div className="space-y-1">
-                            {entry.debits?.map((db, idx) => {
-                              const name = resolveAccountName(db.accountId, accounts);
-                              const badgeClass = getAccountBadgeClass(db.accountId, db.type);
+                            {entry.debits?.map((dbItem, idx) => {
+                              const name = resolveAccountName(dbItem.accountId, accounts);
+                              const badgeClass = getAccountBadgeClass(dbItem.accountId, dbItem.type);
                               return (
                                 <span key={idx} className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-md text-[11px] font-semibold ${badgeClass}`}>
                                   <span>{name}</span>
-                                  <span className="text-[9px] font-mono opacity-85">₹{db.amount.toLocaleString('en-IN')}</span>
+                                  <span className="text-[9px] font-mono opacity-85">₹{dbItem.amount.toLocaleString('en-IN')}</span>
                                 </span>
                               );
                             })}
@@ -727,13 +974,13 @@ export function HomePage({
                       <td className="py-3 px-3.5 whitespace-nowrap">
                         {entry.isCompound ? (
                           <div className="space-y-1">
-                            {entry.credits?.map((cr, idx) => {
-                              const name = resolveAccountName(cr.accountId, accounts);
-                              const badgeClass = getAccountBadgeClass(cr.accountId, cr.type);
+                            {entry.credits?.map((crItem, idx) => {
+                              const name = resolveAccountName(crItem.accountId, accounts);
+                              const badgeClass = getAccountBadgeClass(crItem.accountId, crItem.type);
                               return (
                                 <span key={idx} className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-md text-[11px] font-semibold ${badgeClass}`}>
                                   <span>{name}</span>
-                                  <span className="text-[9px] font-mono opacity-85">₹{cr.amount.toLocaleString('en-IN')}</span>
+                                  <span className="text-[9px] font-mono opacity-85">₹{crItem.amount.toLocaleString('en-IN')}</span>
                                 </span>
                               );
                             })}
@@ -848,7 +1095,6 @@ export function HomePage({
             </div>
 
             <form onSubmit={handleExecuteTransfer} className="p-5 space-y-4">
-              {/* Transfer Direction Toggle */}
               <div>
                 <label className="text-xs font-bold text-slate-700 block mb-1.5">Transfer Route</label>
                 <div className="grid grid-cols-2 gap-2">
@@ -880,7 +1126,6 @@ export function HomePage({
                 </div>
               </div>
 
-              {/* Amount */}
               <div>
                 <label className="text-xs font-bold text-slate-700 block mb-1">Transfer Amount (₹)</label>
                 <div className="relative">
@@ -898,7 +1143,6 @@ export function HomePage({
                 </div>
               </div>
 
-              {/* Date */}
               <div>
                 <label className="text-xs font-bold text-slate-700 block mb-1">Date</label>
                 <input
@@ -910,7 +1154,6 @@ export function HomePage({
                 />
               </div>
 
-              {/* Narration */}
               <div>
                 <label className="text-xs font-bold text-slate-700 block mb-1">Narration / Note</label>
                 <input
@@ -966,7 +1209,6 @@ export function HomePage({
             </div>
 
             <div className="p-5 space-y-4 text-xs">
-              {/* Amount Banner */}
               <div className="bg-slate-50 rounded-2xl p-4 text-center border border-slate-100">
                 <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Total Amount</span>
                 <div className="text-2xl font-black text-slate-900 font-mono mt-0.5">
@@ -974,7 +1216,6 @@ export function HomePage({
                 </div>
               </div>
 
-              {/* Accounts breakdown */}
               <div className="space-y-2">
                 <div className="flex justify-between items-center py-1.5 border-b border-gray-100">
                   <span className="font-semibold text-slate-500">Debit (DR) Account:</span>

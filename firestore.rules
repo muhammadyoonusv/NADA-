@@ -10,8 +10,14 @@ service cloud.firestore {
     // Helper: Determine if client is authenticated and verified as an editor
     function isAuthorizedEditor() {
       return request.auth != null 
-        && request.auth.token.email_verified == true
-        && (request.auth.token.email == 'klrmuhsin809@gmail.com' || request.auth.token.email == 'yoonuschr@gmail.com');
+        && request.auth.token.email != null
+        && (
+          request.auth.token.email.lower() == 'klrmuhsin809@gmail.com' 
+          || request.auth.token.email.lower() == 'yoonuschr@gmail.com'
+          || (exists(/databases/$(database)/documents/metadata/config) 
+              && 'allowedEmails' in get(/databases/$(database)/documents/metadata/config).data
+              && request.auth.token.email.lower() in get(/databases/$(database)/documents/metadata/config).data.allowedEmails)
+        );
     }
 
     // Helper: Schema validation for accounts
@@ -42,17 +48,21 @@ service cloud.firestore {
         && (data.get('creditAccountType', '') is string);
     }
 
-    // Helper: Schema validation for profile details (supports both standard 6-field and extended logoIcon)
+    // Helper: Schema validation for profile details (supports standard, extended logoIcon, and banner customizations)
     function isValidMetadata(data) {
-      return data.keys().hasAll(['sheetName', 'sheetTagline', 'treasurerName', 'treasurerEmail', 'academicYear', 'allowedEmails'])
-        && data.keys().size() <= 8
-        && data.sheetName is string && data.sheetName.size() <= 200
-        && data.sheetTagline is string && data.sheetTagline.size() <= 500
-        && data.treasurerName is string && data.treasurerName.size() <= 200
-        && data.treasurerEmail is string && data.treasurerEmail.size() <= 200
-        && data.academicYear is string && data.academicYear.size() <= 100
-        && data.allowedEmails is list && data.allowedEmails.size() <= 100
-        && (data.get('logoIcon', '') is string && data.get('logoIcon', '').size() <= 500000);
+      return data.keys().size() <= 15
+        && (data.get('sheetName', '') is string && data.get('sheetName', '').size() <= 200)
+        && (data.get('sheetTagline', '') is string && data.get('sheetTagline', '').size() <= 500)
+        && (data.get('treasurerName', '') is string && data.get('treasurerName', '').size() <= 200)
+        && (data.get('treasurerEmail', '') is string && data.get('treasurerEmail', '').size() <= 200)
+        && (data.get('academicYear', '') is string && data.get('academicYear', '').size() <= 100)
+        && (data.get('allowedEmails', []) is list && data.get('allowedEmails', []).size() <= 100)
+        && (data.get('logoIcon', '') is string && data.get('logoIcon', '').size() <= 500000)
+        && (data.get('bannerGreeting', '') is string && data.get('bannerGreeting', '').size() <= 200)
+        && (data.get('bannerHeadline', '') is string && data.get('bannerHeadline', '').size() <= 500)
+        && (data.get('bannerSub1', '') is string && data.get('bannerSub1', '').size() <= 200)
+        && (data.get('bannerSub2', '') is string && data.get('bannerSub2', '').size() <= 200)
+        && (data.get('bannerQuote', '') is string && data.get('bannerQuote', '').size() <= 500);
     }
 
     // Helper: Schema validation for AI presets
@@ -134,18 +144,20 @@ service cloud.firestore {
     // Collection: Metadata Config Rules
     match /metadata/{configId} {
       allow read: if true;
-      // Allow bootstrap creation if user is klrmuhsin809@gmail.com or yoonuschr@gmail.com
+      // Allow creation if user is an authorized editor
       allow create: if isValidId(configId) && (
-        (configId == 'config' && isValidMetadata(request.resource.data) 
-          && request.auth != null && request.auth.token.email_verified == true 
-          && (request.auth.token.email == 'klrmuhsin809@gmail.com' || request.auth.token.email == 'yoonuschr@gmail.com'))
+        (configId == 'config' && isValidMetadata(request.resource.data) && isAuthorizedEditor())
         || (configId == 'ai_presets' && isAuthorizedEditor() && isValidAiPresets(request.resource.data))
       );
         
       // Allow editors to update, but only klrmuhsin809@gmail.com or yoonuschr@gmail.com can alter allowedEmails
       allow update: if isValidId(configId) && (
         (configId == 'config' && isAuthorizedEditor() && isValidMetadata(request.resource.data)
-          && (request.auth.token.email == 'klrmuhsin809@gmail.com' || request.auth.token.email == 'yoonuschr@gmail.com' || request.resource.data.allowedEmails == resource.data.allowedEmails))
+          && (request.auth.token.email.lower() == 'klrmuhsin809@gmail.com' 
+              || request.auth.token.email.lower() == 'yoonuschr@gmail.com' 
+              || !('allowedEmails' in resource.data) 
+              || !('allowedEmails' in request.resource.data) 
+              || request.resource.data.allowedEmails == resource.data.allowedEmails))
         || (configId == 'ai_presets' && isAuthorizedEditor() && isValidAiPresets(request.resource.data))
       );
         

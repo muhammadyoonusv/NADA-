@@ -22,7 +22,6 @@ import { SidebarProfileFolder } from './components/SidebarProfileFolder';
 import { ProfilePageView } from './components/ProfilePageView';
 import { QuickTemplatesPageView } from './components/QuickTemplatesPageView';
 import { PrivacySecurityView } from './components/PrivacySecurityView';
-import { AIChatBot } from './components/AIChatBot';
 import { Users as UsersIcon } from 'lucide-react';
 import {
   collection,
@@ -84,7 +83,8 @@ import {
   LogOut,
   ChevronDown,
   ChevronRight,
-  ShieldCheck
+  ShieldCheck,
+  ListCollapse
 } from 'lucide-react';
 
 const DEFAULT_STUDENTS: Student[] = [];
@@ -97,7 +97,7 @@ export default function App() {
   const [programs, setPrograms] = useState<Program[]>([]);
   const [loadingPrograms, setLoadingPrograms] = useState(true);
 
-  // Custom Toast notification states for an elegant UX without iframe alert restrictions
+  // Custom Toast notification states - No time limit, remains until manually dismissed
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'err' | 'info' } | null>(null);
   const [notifications, setNotifications] = useState<AppNotification[]>([]);
 
@@ -106,7 +106,7 @@ export default function App() {
   const [allowedEmails, setAllowedEmails] = useState<string[]>(['klrmuhsin809@gmail.com', 'yoonuschr@gmail.com']);
   const [authLoading, setAuthLoading] = useState(true);
 
-  // Helper: Access validation checker - permits editing only when signed in as authorized editor
+  // Dynamic access validation: checks current founders and ANY administrator added in upcoming days
   const isEditor = !!(currentUser && currentUser.email && (
     currentUser.email.toLowerCase() === 'klrmuhsin809@gmail.com' ||
     currentUser.email.toLowerCase() === 'yoonuschr@gmail.com' ||
@@ -142,7 +142,6 @@ export default function App() {
           setNotifications(prev => {
             if (prev.some(n => n.id === change.doc.id)) return prev;
             
-            // Read seen/read logs from localStorage
             const readKey = `read_notifs_${currentUser.email?.toLowerCase() || 'global'}`;
             const readIdsStr = localStorage.getItem(readKey) || '[]';
             let readIds: string[] = [];
@@ -169,20 +168,62 @@ export default function App() {
     return unsub;
   }, [currentUser]);
 
-  useEffect(() => {
-    if (toast) {
-      const timer = setTimeout(() => {
-        setToast(null);
-      }, 5000);
-      return () => clearTimeout(timer);
-    }
-  }, [toast]);
-
   const [activeTab, setActiveTab] = useState<'home' | 'journal' | 'ledgers' | 'trial' | 'receipts' | 'expenditure' | 'balance' | 'chart' | 'dues' | 'settings' | 'profile' | 'templates' | 'privacy'>('home');
   const [isAppSidebarOpen, setIsAppSidebarOpen] = useState(false);
   const [isReportsMobileMenuOpen, setIsReportsMobileMenuOpen] = useState(false);
   const [isHelpOpen, setIsHelpOpen] = useState(false);
   const [isTopMenuOpen, setIsTopMenuOpen] = useState(false);
+
+  const [showExitConfirm, setShowExitConfirm] = useState(false);
+  const [isAppExited, setIsAppExited] = useState(false);
+
+  // Exit trigger handler:
+  // If NOT on Home -> simply navigate to Home
+  // If already on Home -> ask "Are you sure to exit?"
+  const handleExitAction = () => {
+    setIsAppSidebarOpen(false);
+    setIsReportsMobileMenuOpen(false);
+    setIsTopMenuOpen(false);
+
+    if (activeTab !== 'home') {
+      setActiveTab('home');
+    } else {
+      setShowExitConfirm(true);
+    }
+  };
+
+  // Browser / Device hardware back navigation listener
+  useEffect(() => {
+    window.history.pushState({ tab: activeTab }, '', '');
+
+    const handlePopState = (e: PopStateEvent) => {
+      e.preventDefault();
+      if (activeTab !== 'home') {
+        setActiveTab('home');
+        window.history.pushState({ tab: 'home' }, '', '');
+      } else {
+        setShowExitConfirm(true);
+        window.history.pushState({ tab: 'home' }, '', '');
+      }
+    };
+
+    window.addEventListener('popstate', handlePopState);
+    return () => {
+      window.removeEventListener('popstate', handlePopState);
+    };
+  }, [activeTab]);
+
+  const handleExecuteExit = () => {
+    setShowExitConfirm(false);
+    setIsAppExited(true);
+    try {
+      window.close();
+    } catch (e) {
+      console.warn("Could not close window");
+    }
+    // Fallback if browser blocks window.close()
+    window.location.href = 'about:blank';
+  };
 
   const [activePresetTab, setActivePresetTab] = useState<'standard' | 'ai'>('standard');
   const [quickTemplateToApply, setQuickTemplateToApply] = useState<{template: any, timestamp: number} | null>(null);
@@ -218,6 +259,50 @@ export default function App() {
     },
   ];
 
+  // Official Gemini AI mini window trigger with dynamic admin context & no popup block
+  const openGeminiMiniScreen = () => {
+    const width = 460;
+    const height = 720;
+    const left = Math.max(0, window.screen.width - width - 30);
+    const top = 50;
+
+    const popupWin = window.open(
+      'https://gemini.google.com/app',
+      'GeminiMiniWindow',
+      `width=${width},height=${height},top=${top},left=${left},resizable=yes,scrollbars=yes,status=no,toolbar=no,menubar=no`
+    );
+
+    if (popupWin) {
+      popupWin.focus();
+    }
+
+    const userEmail = currentUser?.email || 'Authorized User';
+    const userName = currentUser?.displayName || userEmail.split('@')[0];
+    const roleTitle = isEditor ? 'Authorized System Administrator' : 'Viewer';
+
+    const contextText = 
+`[SYSTEM NOTICE: ACTIVE NADA UNION LEDGER SESSION]
+Organization: ${sheetName || 'NADA'}
+Batch: ${sheetTagline || '19th Batch'}
+User: ${userName} (${userEmail})
+Role: ${roleTitle}
+Currency: INR (₹)
+Clearance: ${isEditor ? 'FULL ADMINISTRATOR ACCESS (Ledger modifications, student dues audit, financial statements)' : 'READ-ONLY ACCESS'}
+
+Hi Gemini! I am an ${roleTitle} for the ${sheetName || 'NADA'} class union ledger. Assume all my questions are strictly about our 19th Batch accounting, student dues, petty cash, bank records, and double-entry bookkeeping in Indian Rupees (₹). No further introduction needed.`;
+
+    if (navigator.clipboard) {
+      navigator.clipboard.writeText(contextText).catch(() => {});
+    }
+
+    showToast(
+      isEditor
+        ? "Admin context copied! In the Gemini window, simply press Ctrl+V (or Paste) to begin without introduction."
+        : "Ledger context copied! In the Gemini window, simply press Ctrl+V (or Paste) to begin.",
+      "info"
+    );
+  };
+
   const handleApplyTemplate = (template: any) => {
     setQuickTemplateToApply({ template, timestamp: Date.now() });
     setActiveTab('journal');
@@ -231,9 +316,7 @@ export default function App() {
     if (!saved || saved === 'Accountability for a Better Tomorrow' || saved.includes('Double-entry accounting')) {
       try {
         localStorage.setItem('app_sheet_tagline', '19th Batch');
-      } catch (e) {
-        // ignore
-      }
+      } catch (e) {}
       return '19th Batch';
     }
     return saved;
@@ -254,7 +337,6 @@ export default function App() {
   // AI Templates state
   const [aiPresets, setAiPresets] = useState<{ label: string; desc: string; debit: string; credit: string; narration: string }[]>([]);
   const [loadingAiPresets, setLoadingAiPresets] = useState(false);
-  const [isBotOpen, setIsBotOpen] = useState(false);
 
   // Auth Status Subscriber
   useEffect(() => {
@@ -1289,11 +1371,11 @@ export default function App() {
 
     (async () => {
       try {
-        await setDoc(doc(db, 'metadata', 'config'), extended7Payload);
+        await setDoc(doc(db, 'metadata', 'config'), extended7Payload, { merge: true });
       } catch (firstErr: any) {
         console.warn('Extended 7-field save failed. Retrying standard 6-field write...', firstErr);
         try {
-          await setDoc(doc(db, 'metadata', 'config'), standard6Payload);
+          await setDoc(doc(db, 'metadata', 'config'), standard6Payload, { merge: true });
         } catch (secondErr: any) {
           console.error('Cloud write restriction:', secondErr);
         }
@@ -1343,10 +1425,10 @@ export default function App() {
 
       (async () => {
         try {
-          await setDoc(doc(db, 'metadata', 'config'), extended7Payload);
+          await setDoc(doc(db, 'metadata', 'config'), extended7Payload, { merge: true });
         } catch {
           try {
-            await setDoc(doc(db, 'metadata', 'config'), standard6Payload);
+            await setDoc(doc(db, 'metadata', 'config'), standard6Payload, { merge: true });
           } catch (err) {
             console.warn('Background logo sync failed:', err);
           }
@@ -1472,28 +1554,6 @@ export default function App() {
           </div>
 
           <div className="flex items-center gap-1.5 sm:gap-2.5 shrink-0">
-            {/* Direct Link to Google Gemini in the SAME TAB (Breaks out of iframe via target="_top") */}
-            <a
-              href="https://gemini.google.com"
-              target="_top"
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 hover:opacity-95 text-white text-xs font-bold transition-all shadow-3xs cursor-pointer"
-              title="Open Gemini AI in this tab"
-            >
-              <Sparkles size={14} className="text-white animate-pulse" />
-              <span>Open Gemini</span>
-            </a>
-
-            {/* Gemini AI In-App Header Button */}
-            <button
-              type="button"
-              onClick={() => setIsBotOpen(true)}
-              className="hidden sm:inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-blue-50 hover:bg-blue-100 text-blue-950 border border-blue-200/90 text-xs font-bold transition-all cursor-pointer shadow-3xs"
-              title="Open Gemini AI Assistant"
-            >
-              <Sparkles size={14} className="text-blue-600" />
-              <span>Gemini AI</span>
-            </button>
-
             {/* Notification Bell */}
             <NotificationCenter 
               notifications={notifications}
@@ -1648,9 +1708,9 @@ export default function App() {
                           setIsTopMenuOpen(false);
                           handleSignOut();
                         }}
-                        className="w-full px-3 py-2 text-left text-xs font-semibold text-rose-600 hover:bg-rose-50 hover:text-rose-700 flex items-center gap-2.5 transition-colors cursor-pointer border-t border-gray-100 mt-1 whitespace-nowrap"
+                        className="w-full px-3 py-2 text-left text-xs font-semibold text-slate-600 hover:bg-slate-50 hover:text-slate-700 flex items-center gap-2.5 transition-colors cursor-pointer border-t border-gray-100 mt-1 whitespace-nowrap"
                       >
-                        <LogOut size={15} className="text-rose-500 shrink-0" />
+                        <UserIcon size={15} className="text-slate-400 shrink-0" />
                         <span>Logout</span>
                       </button>
                     ) : (
@@ -1828,7 +1888,7 @@ export default function App() {
         )}
 
         {/* Dashboard Cards summary section */}
-        {accounts.length > 0 && activeTab !== 'home' && activeTab !== 'profile' && activeTab !== 'templates' && activeTab !== 'settings' && activeTab !== 'privacy' && (
+        {accounts.length > 0 && activeTab !== 'home' && activeTab !== 'profile' && activeTab !== 'templates' && activeTab !== 'settings' && activeTab !== 'privacy' && activeTab !== 'chart' && (
           <DashboardCards 
             accounts={accounts} 
             entries={entries} 
@@ -1838,7 +1898,7 @@ export default function App() {
         )}
 
         {/* Tabs navigation list */}
-        {activeTab !== 'profile' && activeTab !== 'templates' && activeTab !== 'settings' && activeTab !== 'privacy' && (
+        {activeTab !== 'profile' && activeTab !== 'templates' && activeTab !== 'settings' && activeTab !== 'privacy' && activeTab !== 'chart' && (
           <div className="hidden md:flex bg-white border border-gray-200 rounded-xl p-1.5 overflow-x-auto gap-1 shadow-3xs sticky top-16 sm:top-20 z-30 whitespace-nowrap [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden scroll-smooth">
             {[
               { id: 'home', label: 'Home', icon: Home, color: 'text-indigo-600' },
@@ -1882,6 +1942,7 @@ export default function App() {
               isEditor={isEditor}
               sheetName={sheetName}
               sheetTagline={sheetTagline}
+              academicYear={academicYear}
               onNavigateToTab={(tab) => setActiveTab(tab as any)}
               onOpenAddEntry={() => {
                 setActiveTab('journal');
@@ -2047,6 +2108,55 @@ export default function App() {
             />
           )}
 
+          {activeTab === 'chart' && (
+            <div className="space-y-4 animate-in fade-in duration-200">
+              <div className="bg-white border border-gray-200/90 rounded-2xl p-5 shadow-3xs flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div className="flex items-center gap-3.5">
+                  <div className="w-11 h-11 rounded-2xl bg-gradient-to-tr from-indigo-600 to-purple-600 text-white flex items-center justify-center shadow-3xs shrink-0">
+                    <ListCollapse size={22} />
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <h2 className="text-lg font-black text-slate-900 tracking-tight">Chart of Accounts Mapping</h2>
+                      <span className="text-[10px] font-mono font-bold text-indigo-700 bg-indigo-50 border border-indigo-200/80 px-2 py-0.5 rounded-full uppercase">
+                        Master Ledger Registry
+                      </span>
+                    </div>
+                    <p className="text-xs text-slate-500 mt-0.5">
+                      Configure double-entry accounting classes, normal balances (Dr/Cr), and custom ledger titles
+                    </p>
+                  </div>
+                </div>
+                
+                <div className="flex items-center gap-2 self-start sm:self-auto shrink-0">
+                  <button
+                    type="button"
+                    onClick={() => setActiveTab('ledgers')}
+                    className="px-3.5 py-1.5 rounded-xl border border-slate-200 bg-slate-50 hover:bg-slate-100 text-xs font-semibold text-slate-700 transition-colors cursor-pointer"
+                  >
+                    View General Ledger ➔
+                  </button>
+                  <button
+                    type="button"
+                    id="chart-back-home-button"
+                    onClick={() => setActiveTab('home')}
+                    className="px-3.5 py-1.5 rounded-xl border border-gray-200 bg-white hover:bg-gray-50 text-xs font-semibold text-gray-700 transition-colors cursor-pointer shadow-3xs flex items-center gap-1.5"
+                  >
+                    <span>← Back to Home</span>
+                  </button>
+                </div>
+              </div>
+
+              <ChartOfAccounts
+                accounts={accounts}
+                isEditor={isEditor}
+                onAddAccount={handleAddAccount}
+                onEditAccount={handleEditAccount}
+                onDeleteAccount={handleDeleteAccount}
+              />
+            </div>
+          )}
+
           {activeTab === 'privacy' && (
             <PrivacySecurityView
               currentUser={currentUser}
@@ -2075,22 +2185,36 @@ export default function App() {
         </div>
       </footer>
 
-      {/* Floating Gemini AI Assistant */}
-      <AIChatBot
-        accounts={accounts}
-        entries={entries}
-        students={students}
-        sheetName={sheetName}
-        treasurerName={treasurerName}
-        academicYear={academicYear}
-        isEditor={isEditor}
-        onAddEntry={handleAddEntry}
-        onAddAccount={handleAddAccount}
-        onNavigateTab={(tab) => setActiveTab(tab as any)}
-        showToast={showToast}
-        isOpen={isBotOpen}
-        onOpenChange={setIsBotOpen}
-      />
+      {/* Exit Confirmation Dialog */}
+      {showExitConfirm && (
+        <div className="fixed inset-0 z-[250] bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-200">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm overflow-hidden animate-in zoom-in-95 duration-200">
+            <div className="p-6 text-center">
+              <div className="w-12 h-12 rounded-full bg-rose-50 text-rose-600 flex items-center justify-center mx-auto mb-3 border border-rose-100">
+                <LogOut size={22} className="stroke-[2.2]" />
+              </div>
+              <h3 className="text-base font-extrabold text-slate-900 mb-1">Are you sure to exit?</h3>
+              <p className="text-xs text-slate-500 mb-6">Do you want to close this session or exit the app?</p>
+              <div className="flex gap-3">
+                <button
+                  type="button"
+                  onClick={() => setShowExitConfirm(false)}
+                  className="flex-1 px-4 py-2.5 text-xs font-bold text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-xl transition-colors cursor-pointer"
+                >
+                  No
+                </button>
+                <button
+                  type="button"
+                  onClick={handleExecuteExit}
+                  className="flex-1 px-4 py-2.5 text-xs font-bold text-white bg-rose-600 hover:bg-rose-700 rounded-xl shadow-xs transition-colors cursor-pointer"
+                >
+                  Yes
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Confirmation Dialog Component */}
       {confirmDialog?.isOpen && (
@@ -2130,7 +2254,7 @@ export default function App() {
         </div>
       )}
 
-      {/* Toast Notifications */}
+      {/* Persistent Toast Notifications - Stays on screen without automatic time limit */}
       {toast && (
         <div 
           className={`fixed bottom-20 sm:bottom-5 left-3 right-3 sm:left-auto sm:right-5 z-[100] flex items-center gap-3 px-4 py-3 rounded-xl border shadow-lg sm:max-w-sm backdrop-blur-md transition-all duration-300 animate-in fade-in slide-in-from-bottom-5 ${
@@ -2158,6 +2282,19 @@ export default function App() {
           </button>
         </div>
       )}
+
+      {/* Floating Gemini AI Icon Button - Positioned on the right, directly above 'Statements' */}
+      <div className="fixed bottom-18 right-3.5 z-40 sm:bottom-6 sm:right-6">
+        <button
+          type="button"
+          onClick={openGeminiMiniScreen}
+          className="w-11 h-11 sm:w-12 sm:h-12 rounded-full bg-gradient-to-tr from-blue-600 via-indigo-600 to-purple-600 hover:scale-105 active:scale-95 text-white flex items-center justify-center shadow-lg shadow-indigo-500/30 border border-white/20 transition-all cursor-pointer"
+          title="Open Gemini AI"
+          aria-label="Open Gemini AI"
+        >
+          <Sparkles size={20} className="text-white animate-pulse" />
+        </button>
+      </div>
 
       {/* Mobile Bottom Navigation Bar */}
       <div 
@@ -2316,22 +2453,25 @@ export default function App() {
 
             <div className="flex-1 overflow-y-auto p-3 space-y-2.5">
 
-              {/* Direct Link to Google Gemini in the SAME TAB (Breaks out of iframe via target="_top") */}
+              {/* Sidebar Button to Open Official Google Gemini in Mini Popup Window */}
               <div className="border border-indigo-200 rounded-xl overflow-hidden bg-white shadow-3xs transition-all">
-                <a
-                  href="https://gemini.google.com"
-                  target="_top"
+                <button
+                  type="button"
+                  onClick={() => {
+                    openGeminiMiniScreen();
+                    setIsAppSidebarOpen(false);
+                  }}
                   className="w-full flex items-center justify-between p-3.5 text-left cursor-pointer transition-colors group bg-indigo-50/60 hover:bg-indigo-100/60 text-indigo-950"
-                  title="Open official Google Gemini in this tab"
+                  title="Open Google Gemini in a floating mini window"
                 >
                   <div className="flex items-center gap-2.5 font-bold text-xs">
                     <Sparkles size={16} className="text-indigo-600 animate-pulse" />
                     <span>Open Google Gemini</span>
                   </div>
                   <span className="text-[10px] font-semibold text-indigo-600 bg-white px-2 py-0.5 rounded-md border border-indigo-100">
-                    Go ➔
+                    Popup ↗
                   </span>
-                </a>
+                </button>
               </div>
 
               {/* Button 1: Profile */}
@@ -2396,6 +2536,37 @@ export default function App() {
                 </button>
               </div>
 
+              {/* Button: Chart of Account Mapping */}
+              <div className="border border-slate-200 rounded-xl overflow-hidden bg-white shadow-3xs transition-all">
+                <button
+                  type="button"
+                  id="chart-mapping-sidebar-button"
+                  onClick={() => {
+                    setActiveTab('chart');
+                    setIsAppSidebarOpen(false);
+                  }}
+                  className={`w-full flex items-center justify-between p-3.5 text-left cursor-pointer transition-colors group ${
+                    activeTab === 'chart'
+                      ? 'bg-indigo-50 border-l-4 border-l-indigo-600 text-indigo-950'
+                      : 'bg-slate-50/60 hover:bg-indigo-50/40 text-slate-800 hover:text-indigo-900'
+                  }`}
+                  title="Open Chart of Account Mapping Page"
+                >
+                  <div className="flex items-center gap-2.5 font-bold text-xs">
+                    <ListCollapse size={16} className={activeTab === 'chart' ? 'text-indigo-600' : 'text-slate-600 group-hover:text-indigo-600 transition-colors'} />
+                    <span>Chart of Account Mapping</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <ChevronRight 
+                      size={16} 
+                      className={`transition-colors ${
+                        activeTab === 'chart' ? 'text-indigo-600' : 'text-gray-400 group-hover:text-indigo-600'
+                      }`} 
+                    />
+                  </div>
+                </button>
+              </div>
+
               {/* Button 3: Privacy & Security */}
               <div className="border border-slate-200 rounded-xl overflow-hidden bg-white shadow-3xs transition-all">
                 <button
@@ -2426,6 +2597,8 @@ export default function App() {
                   </div>
                 </button>
               </div>
+
+
             </div>
           </div>
         </div>

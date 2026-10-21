@@ -90,6 +90,26 @@
           "type": "array",
           "items": { "type": "string" },
           "description": "Array of 3 authorized editor email addresses"
+        },
+        "bannerGreeting": {
+          "type": "string",
+          "description": "Optional custom banner greeting text"
+        },
+        "bannerHeadline": {
+          "type": "string",
+          "description": "Custom hero banner main headline"
+        },
+        "bannerSub1": {
+          "type": "string",
+          "description": "Custom hero banner primary tagline"
+        },
+        "bannerSub2": {
+          "type": "string",
+          "description": "Custom hero banner secondary tagline"
+        },
+        "bannerQuote": {
+          "type": "string",
+          "description": "Custom hero banner motto or quote"
         }
       },
       "required": ["sheetName", "sheetTagline", "treasurerName", "treasurerEmail", "academicYear", "allowedEmails"]

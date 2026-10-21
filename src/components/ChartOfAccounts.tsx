@@ -3,9 +3,23 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { Account, AccountType } from '../types';
-import { ListCollapse, Plus, HelpCircle, ShieldAlert, Trash2 } from 'lucide-react';
+import { 
+  Search, 
+  Plus, 
+  Edit3, 
+  Trash2, 
+  X, 
+  AlertCircle,
+  HelpCircle,
+  SlidersHorizontal,
+  Landmark,
+  Wallet,
+  TrendingUp,
+  Receipt,
+  Scale
+} from 'lucide-react';
 
 interface ChartOfAccountsProps {
   accounts: Account[];
@@ -15,298 +29,648 @@ interface ChartOfAccountsProps {
   onDeleteAccount: (id: string) => void;
 }
 
-export function ChartOfAccounts({ accounts, isEditor = false, onAddAccount, onEditAccount, onDeleteAccount }: ChartOfAccountsProps) {
-  const [name, setName] = useState('');
-  const [type, setType] = useState<AccountType>('Expense');
-  const [deletingAccountId, setDeletingAccountId] = useState<string | null>(null);
-  const [editingAccountId, setEditingAccountId] = useState<string | null>(null);
-  const [editingName, setEditingName] = useState('');
-  const [editingType, setEditingType] = useState<AccountType>('Expense');
+const ACCOUNT_TYPE_META: Record<AccountType, {
+  label: string;
+  normalBalance: 'Debit (Dr)' | 'Credit (Cr)';
+  color: string;
+  bgLight: string;
+  badgeClass: string;
+  description: string;
+  icon: React.ComponentType<{ size?: number; className?: string }>;
+}> = {
+  Asset: {
+    label: 'Asset',
+    normalBalance: 'Debit (Dr)',
+    color: 'text-emerald-700',
+    bgLight: 'bg-emerald-50/70 border-emerald-100',
+    badgeClass: 'bg-emerald-50 text-emerald-700 border-emerald-200/80',
+    description: 'Cash in hand, bank balances, equipment, receivables & advances',
+    icon: Wallet
+  },
+  Liability: {
+    label: 'Liability',
+    normalBalance: 'Credit (Cr)',
+    color: 'text-amber-700',
+    bgLight: 'bg-amber-50/70 border-amber-100',
+    badgeClass: 'bg-amber-50 text-amber-700 border-amber-200/80',
+    description: 'Payables to students, vendor bills, advances & money owed',
+    icon: Scale
+  },
+  Equity: {
+    label: 'Equity',
+    normalBalance: 'Credit (Cr)',
+    color: 'text-violet-700',
+    bgLight: 'bg-violet-50/70 border-violet-100',
+    badgeClass: 'bg-violet-50 text-violet-700 border-violet-200/80',
+    description: 'Capital reserves, opening balances & accumulated union surplus',
+    icon: Landmark
+  },
+  Income: {
+    label: 'Income',
+    normalBalance: 'Credit (Cr)',
+    color: 'text-sky-700',
+    bgLight: 'bg-sky-50/70 border-sky-100',
+    badgeClass: 'bg-sky-50 text-sky-700 border-sky-200/80',
+    description: 'Membership dues, sponsorship grants, ticket revenue & contributions',
+    icon: TrendingUp
+  },
+  Expense: {
+    label: 'Expense',
+    normalBalance: 'Debit (Dr)',
+    color: 'text-rose-700',
+    bgLight: 'bg-rose-50/70 border-rose-100',
+    badgeClass: 'bg-rose-50 text-rose-700 border-rose-200/80',
+    description: 'Refreshments, printing, stationery, programs, venue rent & operations',
+    icon: Receipt
+  }
+};
 
-  const handleSubmit = (e: React.FormEvent) => {
+export function ChartOfAccounts({ accounts, isEditor = false, onAddAccount, onEditAccount, onDeleteAccount }: ChartOfAccountsProps) {
+  // Search & Filter States
+  const [searchQuery, setSearchQuery] = useState('');
+  const [selectedTypeFilter, setSelectedTypeFilter] = useState<'ALL' | AccountType>('ALL');
+  const [sortBy, setSortBy] = useState<'id' | 'name' | 'type'>('id');
+
+  // Modal Dialog States
+  const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+  const [editingAccount, setEditingAccount] = useState<Account | null>(null);
+  const [deletingAccount, setDeletingAccount] = useState<Account | null>(null);
+
+  // Form States (Add)
+  const [newName, setNewName] = useState('');
+  const [newType, setNewType] = useState<AccountType>('Expense');
+  const [addFormError, setAddFormError] = useState<string | null>(null);
+
+  // Form States (Edit)
+  const [editName, setEditName] = useState('');
+  const [editType, setEditType] = useState<AccountType>('Expense');
+  const [editFormError, setEditFormError] = useState<string | null>(null);
+
+  // Filtered & Sorted Accounts
+  const filteredAccounts = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
+    return accounts
+      .filter((acc) => {
+        const matchesSearch = !q || acc.name.toLowerCase().includes(q) || acc.id.toLowerCase().includes(q) || acc.type.toLowerCase().includes(q);
+        const matchesType = selectedTypeFilter === 'ALL' || acc.type === selectedTypeFilter;
+        return matchesSearch && matchesType;
+      })
+      .sort((a, b) => {
+        if (sortBy === 'name') return a.name.localeCompare(b.name);
+        if (sortBy === 'type') return a.type.localeCompare(b.type);
+        // Default sort: ID numeric order if numbers, else alphabetical
+        const numA = parseInt(a.id, 10);
+        const numB = parseInt(b.id, 10);
+        if (!isNaN(numA) && !isNaN(numB)) return numA - numB;
+        return a.id.localeCompare(b.id);
+      });
+  }, [accounts, searchQuery, selectedTypeFilter, sortBy]);
+
+  // Handler: Add Account Submit
+  const handleAddSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!isEditor) {
-      alert('Access denied: You have read-only authorizations.');
+    if (!isEditor) return;
+
+    const trimmed = newName.trim();
+    if (!trimmed) {
+      setAddFormError('Please enter a valid account name.');
       return;
     }
-    if (!name.trim()) return;
 
-    // Direct check for duplicate names
-    const duplicate = accounts.some((a) => a.name.toLowerCase() === name.trim().toLowerCase());
+    const duplicate = accounts.some((a) => a.name.toLowerCase() === trimmed.toLowerCase());
     if (duplicate) {
-      alert('An account with this name already exists in your union database chart.');
+      setAddFormError(`An account titled "${trimmed}" already exists in the Chart of Accounts.`);
       return;
     }
 
     onAddAccount({
-      name: name.trim(),
-      type,
+      name: trimmed,
+      type: newType,
     });
 
-    setName('');
+    setNewName('');
+    setNewType('Expense');
+    setAddFormError(null);
+    setIsAddModalOpen(false);
+  };
+
+  // Handler: Start Editing
+  const openEditModal = (acc: Account) => {
+    setEditingAccount(acc);
+    setEditName(acc.name);
+    setEditType(acc.type);
+    setEditFormError(null);
+  };
+
+  // Handler: Save Edit
+  const handleEditSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!isEditor || !editingAccount) return;
+
+    const trimmed = editName.trim();
+    if (!trimmed) {
+      setEditFormError('Account name cannot be empty.');
+      return;
+    }
+
+    if (trimmed.toLowerCase() !== editingAccount.name.toLowerCase()) {
+      const duplicate = accounts.some((a) => a.id !== editingAccount.id && a.name.toLowerCase() === trimmed.toLowerCase());
+      if (duplicate) {
+        setEditFormError(`An account titled "${trimmed}" already exists.`);
+        return;
+      }
+    }
+
+    onEditAccount(editingAccount.id, trimmed, editType);
+    setEditingAccount(null);
+    setEditFormError(null);
   };
 
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-      {/* Add accounts panel LHS */}
-      <div className="bg-white border border-gray-200 rounded-xl p-5 space-y-4 shadow-sm self-start">
-        <div className="flex items-center gap-2 pb-2 border-b border-gray-100">
-          <ListCollapse className="text-blue-600" size={18} />
-          <h3 className="font-bold text-gray-900 text-sm">Add New Union Account</h3>
+    <div className="space-y-4 animate-in fade-in duration-200 text-left">
+
+      {/* 2. TOOLBAR: SEARCH, CATEGORY PILL FILTER, SORT & PRIMARY ACTION */}
+      <div className="bg-white border border-slate-200/90 rounded-2xl p-4 shadow-3xs flex flex-col md:flex-row gap-3 items-stretch md:items-center justify-between">
+        
+        {/* Search Input */}
+        <div className="relative flex-1 max-w-md">
+          <Search size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
+          <input
+            type="text"
+            placeholder="Search accounts by name, code or classification..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="w-full pl-9 pr-8 py-2 bg-slate-50/60 border border-slate-200 rounded-xl text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 focus:bg-white transition-all"
+          />
+          {searchQuery && (
+            <button
+              type="button"
+              onClick={() => setSearchQuery('')}
+              className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-0.5 rounded cursor-pointer"
+            >
+              <X size={13} />
+            </button>
+          )}
         </div>
 
-        {!isEditor && (
-          <div className="p-3 bg-amber-50 border border-amber-200/80 rounded-lg text-amber-900 text-[11px] text-left leading-normal">
-            ⚙️ <strong>Read-Only Access:</strong> Registering custom ledger classes/titles is restricted to whitelisted editors with active login certificates.
+        {/* Action Controls */}
+        <div className="flex items-center gap-2 overflow-x-auto pb-1 md:pb-0">
+          
+          {/* Classification Filter Tabs */}
+          <div className="flex items-center p-1 bg-slate-100 rounded-xl text-xs shrink-0">
+            <button
+              type="button"
+              onClick={() => setSelectedTypeFilter('ALL')}
+              className={`px-3 py-1.5 rounded-lg font-bold text-[11px] transition-all cursor-pointer ${
+                selectedTypeFilter === 'ALL'
+                  ? 'bg-white text-slate-900 shadow-3xs'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              All ({accounts.length})
+            </button>
+            {(['Asset', 'Liability', 'Income', 'Expense'] as AccountType[]).map((t) => (
+              <button
+                key={t}
+                type="button"
+                onClick={() => setSelectedTypeFilter(t)}
+                className={`px-2.5 py-1.5 rounded-lg font-semibold text-[11px] transition-all cursor-pointer ${
+                  selectedTypeFilter === t
+                    ? 'bg-white text-slate-900 shadow-3xs'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                {t}
+              </button>
+            ))}
+          </div>
+
+          {/* Sort Selector */}
+          <div className="relative shrink-0">
+            <select
+              value={sortBy}
+              onChange={(e) => setSortBy(e.target.value as any)}
+              className="appearance-none bg-white border border-slate-200 text-slate-700 text-xs font-semibold py-2 pl-3 pr-8 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 cursor-pointer shadow-3xs"
+            >
+              <option value="id">Sort by Code (#)</option>
+              <option value="name">Sort by Name (A-Z)</option>
+              <option value="type">Sort by Type</option>
+            </select>
+            <SlidersHorizontal size={13} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+          </div>
+
+          {/* Add Account Trigger */}
+          {isEditor ? (
+            <button
+              type="button"
+              onClick={() => {
+                setAddFormError(null);
+                setIsAddModalOpen(true);
+              }}
+              className="inline-flex items-center gap-1.5 px-4 py-2 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white rounded-xl text-xs font-bold transition-all shadow-3xs cursor-pointer shrink-0"
+            >
+              <Plus size={15} />
+              <span>Add Account</span>
+            </button>
+          ) : (
+            <span className="text-[11px] font-mono text-slate-400 bg-slate-50 px-2.5 py-2 rounded-xl border border-slate-200 shrink-0">
+              Read-Only
+            </span>
+          )}
+        </div>
+      </div>
+
+      {/* 3. MASTER LEDGER MAPPING TABLE */}
+      <div className="bg-white border border-slate-200/90 rounded-2xl shadow-3xs overflow-hidden">
+        
+        {/* Table Header */}
+        <div className="px-5 py-3.5 bg-slate-50/70 border-b border-slate-100 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <h3 className="text-xs font-extrabold uppercase tracking-wider text-slate-700 font-mono">
+              Chart of Accounts Registry
+            </h3>
+            <span className="text-xs text-slate-400">·</span>
+            <span className="text-xs text-slate-500 font-medium">
+              Showing {filteredAccounts.length} of {accounts.length} accounts
+            </span>
+          </div>
+          
+          {isEditor && (
+            <button
+              type="button"
+              onClick={() => {
+                setAddFormError(null);
+                setIsAddModalOpen(true);
+              }}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-bold transition-all shadow-3xs cursor-pointer"
+            >
+              <Plus size={14} />
+              <span>Add Account</span>
+            </button>
+          )}
+        </div>
+
+        {/* Table Content */}
+        {filteredAccounts.length === 0 ? (
+          <div className="p-12 text-center space-y-3">
+            <div className="w-12 h-12 rounded-2xl bg-slate-50 text-slate-400 mx-auto flex items-center justify-center border border-slate-100">
+              <Search size={20} />
+            </div>
+            <div className="space-y-1">
+              <p className="text-sm font-bold text-slate-800">No matching accounts found</p>
+              <p className="text-xs text-slate-500">
+                {searchQuery
+                  ? `No account titles match "${searchQuery}". Try clearing search or category filter.`
+                  : 'No accounts have been registered under this classification.'}
+              </p>
+            </div>
+            {searchQuery && (
+              <button
+                type="button"
+                onClick={() => {
+                  setSearchQuery('');
+                  setSelectedTypeFilter('ALL');
+                }}
+                className="px-3.5 py-1.5 text-xs font-semibold text-indigo-600 hover:text-indigo-800 bg-indigo-50 rounded-xl transition-colors cursor-pointer"
+              >
+                Clear all filters
+              </button>
+            )}
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-left border-collapse">
+              <thead>
+                <tr className="border-b border-slate-100 text-[10px] font-bold text-slate-400 uppercase tracking-wider bg-slate-50/40">
+                  <th className="py-2.5 px-4 w-20 text-center">#</th>
+                  <th className="py-2.5 px-4">Account Title</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100 text-xs">
+                {filteredAccounts.map((acc, index) => {
+                  const meta = ACCOUNT_TYPE_META[acc.type as AccountType] || ACCOUNT_TYPE_META.Expense;
+
+                  return (
+                    <tr key={acc.id} className="hover:bg-slate-50/60 transition-colors group">
+                      
+                      {/* Row Number */}
+                      <td className="py-3 px-4 text-center">
+                        <span className="font-mono font-bold text-slate-600 text-xs bg-slate-100/80 px-2.5 py-1 rounded-md border border-slate-200/60">
+                          {index + 1}
+                        </span>
+                      </td>
+
+                      {/* Account Title */}
+                      <td className="py-3 px-4">
+                        <div className="flex items-center justify-between gap-3">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="font-bold text-slate-900 text-sm tracking-tight">
+                              {acc.name}
+                            </span>
+                            {acc.isSystem && (
+                              <span className="text-[10px] font-medium text-slate-400 bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200/60">
+                                Core
+                              </span>
+                            )}
+                          </div>
+
+                          {isEditor && !acc.isSystem && (
+                            <div className="flex items-center gap-1 opacity-80 group-hover:opacity-100 transition-opacity">
+                              <button
+                                type="button"
+                                onClick={() => openEditModal(acc)}
+                                className="p-1 rounded text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 transition-colors cursor-pointer"
+                                title="Edit account label or type"
+                              >
+                                <Edit3 size={13} />
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setDeletingAccount(acc)}
+                                className="p-1 rounded text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors cursor-pointer"
+                                title="Delete account"
+                              >
+                                <Trash2 size={13} />
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
           </div>
         )}
 
-        <p className="text-xs text-gray-500">
-          Create customized accounts corresponding to your union's activities (e.g., Annual Sports, Seminar Fee Income, Exam Food, Welfare Grant).
-        </p>
-
-        <form onSubmit={handleSubmit} className="space-y-4 text-left">
-          <div>
-            <label className="block text-xs font-semibold text-gray-600 uppercase mb-1">Account Name</label>
-            <input
-              type="text"
-              required
-              disabled={!isEditor}
-              placeholder="e.g. Annual Tour Fees"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none disabled:bg-slate-50 disabled:text-gray-400 disabled:cursor-not-allowed"
-            />
+        {/* Accounting Footer Advice Bar */}
+        <div className="px-5 py-3 bg-slate-50/60 border-t border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between text-[11px] text-slate-500 gap-2">
+          <div className="flex items-center gap-2">
+            <HelpCircle size={14} className="text-indigo-600 shrink-0" />
+            <span>
+              <strong>Accounting Rule:</strong> Assets and Expenses increase on <strong>Debit (Dr)</strong>. Liabilities, Equity, and Incomes increase on <strong>Credit (Cr)</strong>.
+            </span>
           </div>
-
-          <div>
-            <label className="block text-xs font-semibold text-gray-600 uppercase mb-1">Accounting Classification</label>
-            <select
-              value={type}
-              disabled={!isEditor}
-              onChange={(e) => setType(e.target.value as AccountType)}
-              className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none disabled:bg-slate-50 disabled:text-gray-400 disabled:cursor-not-allowed"
-            >
-              <option value="Asset">Asset (Cash, Bank, Equipment, Advances)</option>
-              <option value="Liability">Liability (Payables, Unearned Revenue)</option>
-              <option value="Equity">Equity / Capital Fund (Union reserves)</option>
-              <option value="Income">Income (Fees, Ticket Sales, Donations)</option>
-              <option value="Expense">Expense (Refreshments, Stationary, Rent)</option>
-            </select>
-          </div>
-
-          <button
-            type="submit"
-            disabled={!isEditor}
-            className="w-full flex items-center justify-center gap-1.5 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg text-sm transition-colors shadow-2xs cursor-pointer disabled:bg-slate-350 disabled:text-slate-500 disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            <Plus size={16} />
-            <span>Add Account Class</span>
-          </button>
-        </form>
-
-        <div className="bg-slate-50 p-3.5 border border-slate-100 rounded-lg text-xs leading-5 text-slate-500 space-y-2">
-          <span className="font-bold flex items-center gap-1 text-slate-700">
-            <HelpCircle size={14} className="text-slate-400" />
-            Accounting Guide:
+          <span className="text-slate-400 font-mono text-[10px]">
+            Formula: Assets = Liabilities + Equity
           </span>
-          <p>
-            • <span className="font-semibold text-slate-700">Income</span> accounts model fees collections or donations.
-          </p>
-          <p>
-            • <span className="font-semibold text-slate-700">Expense</span> accounts model daily operational payments.
-          </p>
-          <p>
-            • <span className="font-semibold text-slate-700">Assets</span> cover liquid funds (Cash/Bank) or items owned.
-          </p>
         </div>
       </div>
 
-      {/* Chart list RHS */}
-      <div className="lg:col-span-2 bg-white border border-gray-200 rounded-xl shadow-xs overflow-hidden">
-        <div className="px-4 py-3 bg-gray-50 border-b border-gray-150 flex items-center justify-between">
-          <h4 className="text-sm font-semibold text-gray-700 font-mono">Chart of Accounts Mapping ({accounts.length})</h4>
-          <span className="text-[10px] bg-indigo-50 border border-indigo-200 text-indigo-700 font-bold px-2 py-0.5 rounded-full uppercase">
-            Treasurer Approved Chart
-          </span>
-        </div>
-
-        <div className="divide-y divide-gray-105">
-          {accounts.map((acc) => (
-            <div key={acc.id} className="p-4 flex items-center justify-between hover:bg-slate-50/50 transition-colors">
-              <div className="space-y-1 w-full mr-4">
-                {editingAccountId === acc.id ? (
-                  <form 
-                    onSubmit={(e) => {
-                      e.preventDefault();
-                      const cleanName = editingName.trim();
-                      if (!cleanName) return;
-                      
-                      if (cleanName.toLowerCase() !== acc.name.toLowerCase()) {
-                        const duplicate = accounts.some((a) => a.id !== acc.id && a.name.toLowerCase() === cleanName.toLowerCase());
-                        if (duplicate) {
-                          alert('An account with this name already exists in your union database chart.');
-                          return;
-                        }
-                      }
-                      onEditAccount(acc.id, cleanName, editingType);
-                      setEditingAccountId(null);
-                    }}
-                    className="flex flex-col md:flex-row gap-3 items-stretch md:items-end bg-slate-50 border border-indigo-100 rounded-xl p-3 w-full max-w-xl shadow-xs"
-                  >
-                    <div className="flex-1 space-y-1">
-                      <label className="block text-[10px] font-bold text-slate-500 uppercase">Account Name</label>
-                      <input
-                        autoFocus
-                        type="text"
-                        required
-                        value={editingName}
-                        onChange={(e) => setEditingName(e.target.value)}
-                        className="w-full px-2.5 py-1.5 bg-white border border-gray-250 rounded-lg text-xs leading-normal font-medium focus:ring-2 focus:ring-blue-500 focus:outline-none"
-                      />
-                    </div>
-                    <div className="w-full md:w-48 space-y-1">
-                      <label className="block text-[10px] font-bold text-slate-500 uppercase">Classification</label>
-                      <select
-                        value={editingType}
-                        onChange={(e) => setEditingType(e.target.value as AccountType)}
-                        className="w-full px-2 py-1.5 bg-white border border-gray-250 rounded-lg text-xs font-semibold focus:ring-2 focus:ring-blue-500 focus:outline-none"
-                      >
-                        <option value="Asset">Asset</option>
-                        <option value="Liability">Liability</option>
-                        <option value="Equity">Equity</option>
-                        <option value="Income">Income</option>
-                        <option value="Expense">Expense</option>
-                      </select>
-                    </div>
-                    <div className="flex gap-2 shrink-0 pt-1 md:pt-0">
-                      <button 
-                        type="submit" 
-                        className="px-3.5 py-1.5 text-xs font-extrabold bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg cursor-pointer transition-colors shadow-2xs"
-                      >
-                        Save
-                      </button>
-                      <button 
-                        type="button" 
-                        onClick={() => setEditingAccountId(null)} 
-                        className="px-3.5 py-1.5 text-xs font-extrabold bg-gray-200 hover:bg-gray-300 text-gray-700 border border-gray-300 rounded-lg cursor-pointer transition-all"
-                      >
-                        Cancel
-                      </button>
-                    </div>
-                  </form>
-                ) : (
-                  <span className="font-serif font-bold text-lg text-gray-900">{acc.name}</span>
-                )}
-                <div className="flex items-center gap-2 mt-1">
-                  <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${
-                    acc.type === 'Asset' ? 'bg-emerald-50 text-emerald-700' :
-                    acc.type === 'Liability' ? 'bg-amber-50 text-amber-700' :
-                    acc.type === 'Equity' ? 'bg-indigo-50 text-indigo-700' :
-                    acc.type === 'Income' ? 'bg-sky-50 text-sky-700' :
-                    'bg-rose-50 text-rose-700'
-                  }`}>
-                    {acc.type}
-                  </span>
-                  {acc.isSystem && (
-                    <span className="text-[9px] font-mono font-medium text-gray-400 bg-gray-100 px-1 py-0.5 rounded">
-                      System Reserved Account
-                    </span>
-                  )}
+      {/* 4. MODAL: ADD ACCOUNT DIALOG */}
+      {isAddModalOpen && (
+        <div className="fixed inset-0 z-50 bg-slate-900/40 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in duration-150">
+          <div className="bg-white border border-slate-200 rounded-3xl max-w-md w-full shadow-2xl overflow-hidden animate-in zoom-in-95 duration-150 text-left">
+            
+            {/* Modal Header */}
+            <div className="p-5 border-b border-slate-100 bg-gradient-to-r from-indigo-50/60 to-purple-50/40 flex items-center justify-between">
+              <div className="flex items-center gap-2.5">
+                <div className="w-10 h-10 rounded-xl bg-indigo-100 text-indigo-700 flex items-center justify-center shadow-3xs">
+                  <Plus size={18} />
+                </div>
+                <div>
+                  <h3 className="font-bold text-slate-900 text-base">Add Ledger Account</h3>
+                  <p className="text-xs text-slate-500">Register a new double-entry account title</p>
                 </div>
               </div>
-
-              {isEditor ? (
-                 <div className="flex gap-2 shrink-0">
-                  {!acc.isSystem && (
-                    <>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setEditingAccountId(acc.id);
-                          setEditingName(acc.name);
-                          setEditingType(acc.type);
-                        }}
-                        className="px-2.5 py-1 text-xs font-semibold text-indigo-600 hover:text-white border border-indigo-200 hover:bg-indigo-600 rounded transition-all shadow-3xs cursor-pointer"
-                      >
-                        Edit
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setDeletingAccountId(acc.id)}
-                        className="px-2.5 py-1 text-xs font-semibold text-rose-600 hover:text-white border border-rose-200 hover:bg-rose-600 rounded transition-all shadow-3xs cursor-pointer"
-                      >
-                        Delete
-                      </button>
-                    </>
-                  )}
-                 </div>
-                ) : (
-                  <span className="text-[10px] text-gray-400 font-mono italic">
-                    Immutable
-                  </span>
-              )}
+              <button
+                type="button"
+                onClick={() => setIsAddModalOpen(false)}
+                className="w-8 h-8 rounded-full bg-white hover:bg-slate-100 text-slate-400 hover:text-slate-700 flex items-center justify-center cursor-pointer transition-colors shadow-3xs"
+              >
+                <X size={15} />
+              </button>
             </div>
-          ))}
-        </div>
-      </div>
 
-      {/* Account Deletion Confirmation Modal */}
-      {deletingAccountId && (() => {
-        const accountBeingDeleted = accounts.find(a => a.id === deletingAccountId);
-        return (
-          <div className="fixed inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-fade-in">
-            <div className="bg-white border text-left border-gray-200 rounded-2xl max-w-sm w-full overflow-hidden shadow-2xl">
-              <div className="p-5 border-b border-gray-100 bg-rose-50 flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <Trash2 className="text-rose-600 animate-bounce" size={18} />
-                  <h3 className="text-sm font-bold text-slate-950">
-                    Delete Account Title?
-                  </h3>
+            {/* Modal Form */}
+            <form onSubmit={handleAddSubmit} className="p-5 space-y-4">
+              
+              {addFormError && (
+                <div className="p-3 bg-rose-50 border border-rose-200 rounded-xl text-rose-800 text-xs flex items-start gap-2 animate-in fade-in">
+                  <AlertCircle size={15} className="text-rose-600 shrink-0 mt-0.5" />
+                  <span className="font-medium leading-relaxed">{addFormError}</span>
                 </div>
-                <button
-                  type="button"
-                  onClick={() => setDeletingAccountId(null)}
-                  className="text-gray-400 hover:text-gray-600 font-bold"
+              )}
+
+              {/* Account Name */}
+              <div>
+                <label className="text-xs font-bold text-slate-700 block mb-1">
+                  Account Name / Ledger Label *
+                </label>
+                <input
+                  type="text"
+                  required
+                  autoFocus
+                  placeholder="e.g. Annual Sports Day, Printing & Banners, Seminar Grants"
+                  value={newName}
+                  onChange={(e) => {
+                    setNewName(e.target.value);
+                    if (addFormError) setAddFormError(null);
+                  }}
+                  className="w-full px-3.5 py-2.5 border border-slate-200 rounded-xl text-xs text-slate-900 font-semibold focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all"
+                />
+              </div>
+
+              {/* Accounting Classification */}
+              <div>
+                <label className="text-xs font-bold text-slate-700 block mb-1">
+                  Classification Category *
+                </label>
+                <select
+                  value={newType}
+                  onChange={(e) => setNewType(e.target.value as AccountType)}
+                  className="w-full px-3.5 py-2.5 border border-slate-200 rounded-xl text-xs text-slate-900 font-semibold focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all cursor-pointer bg-white"
                 >
-                  ✕
-                </button>
+                  <option value="Expense">Expense — Disbursals for tea, printing, event rent, food</option>
+                  <option value="Income">Income — Fees collections, ticket sales, sponsorships, donations</option>
+                  <option value="Asset">Asset — Liquid cash, bank balance, sports kits, permanent equipment</option>
+                  <option value="Liability">Liability — Union payables, loans borrowed, advance obligations</option>
+                  <option value="Equity">Equity — Capital reserves, accumulated union surplus fund</option>
+                </select>
               </div>
 
-              <div className="p-5 space-y-3">
-                <p className="text-xs text-gray-650 leading-relaxed">
-                  Do you wish to delete the account label <strong>"{accountBeingDeleted?.name}"</strong>?
-                </p>
-                <p className="text-[11px] text-amber-700 bg-amber-50 border border-amber-100 p-2.5 rounded-lg font-medium">
-                  ⚠️ Note: If there are recorded physical journal transactions tied to this ledger, you must delete those entries first to maintain balance sheets!
+              {/* Accounting Guidance Preview */}
+              <div className="p-3 bg-slate-50 border border-slate-100 rounded-xl text-xs space-y-1 text-slate-600">
+                <div className="flex items-center justify-between font-bold text-slate-800 text-[11px]">
+                  <span>Accounting Impact:</span>
+                  <span className="font-mono text-indigo-700">
+                    Normal Balance: {ACCOUNT_TYPE_META[newType].normalBalance}
+                  </span>
+                </div>
+                <p className="text-[11px] text-slate-500 leading-relaxed">
+                  {ACCOUNT_TYPE_META[newType].description}.
                 </p>
               </div>
 
-              <div className="p-4 bg-slate-50 border-t border-gray-100 flex gap-2 justify-end">
+              {/* Actions */}
+              <div className="pt-2 flex items-center justify-end gap-2 border-t border-slate-100">
                 <button
                   type="button"
-                  onClick={() => setDeletingAccountId(null)}
-                  className="px-3.5 py-1.5 bg-white border border-gray-200 hover:bg-gray-50 text-gray-700 text-xs font-semibold rounded-lg transition-colors cursor-pointer"
+                  onClick={() => setIsAddModalOpen(false)}
+                  className="px-4 py-2 text-xs font-semibold text-slate-600 hover:text-slate-900 rounded-xl hover:bg-slate-100 transition-colors cursor-pointer"
                 >
                   Cancel
                 </button>
                 <button
-                  type="button"
-                  onClick={() => {
-                    if (deletingAccountId) {
-                      onDeleteAccount(deletingAccountId);
-                      setDeletingAccountId(null);
-                    }
-                  }}
-                  className="px-3.5 py-1.5 bg-rose-600 hover:bg-rose-700 text-white text-xs font-semibold rounded-lg transition-colors cursor-pointer shadow-2xs"
+                  type="submit"
+                  disabled={!newName.trim()}
+                  className="px-5 py-2 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white rounded-xl text-xs font-bold transition-all shadow-3xs cursor-pointer disabled:opacity-50"
                 >
-                  Confirm Delete Label
+                  Register Account
                 </button>
               </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* 5. MODAL: EDIT ACCOUNT DIALOG */}
+      {editingAccount && (
+        <div className="fixed inset-0 z-50 bg-slate-900/40 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in duration-150">
+          <div className="bg-white border border-slate-200 rounded-3xl max-w-md w-full shadow-2xl overflow-hidden animate-in zoom-in-95 duration-150 text-left">
+            
+            {/* Header */}
+            <div className="p-5 border-b border-slate-100 bg-gradient-to-r from-indigo-50/60 to-purple-50/40 flex items-center justify-between">
+              <div className="flex items-center gap-2.5">
+                <div className="w-10 h-10 rounded-xl bg-indigo-100 text-indigo-700 flex items-center justify-center shadow-3xs">
+                  <Edit3 size={18} />
+                </div>
+                <div>
+                  <h3 className="font-bold text-slate-900 text-base">Edit Account Title</h3>
+                  <p className="text-xs text-slate-500">Updating #{editingAccount.id} · {editingAccount.name}</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setEditingAccount(null)}
+                className="w-8 h-8 rounded-full bg-white hover:bg-slate-100 text-slate-400 hover:text-slate-700 flex items-center justify-center cursor-pointer transition-colors shadow-3xs"
+              >
+                <X size={15} />
+              </button>
+            </div>
+
+            {/* Form */}
+            <form onSubmit={handleEditSubmit} className="p-5 space-y-4">
+              
+              {editFormError && (
+                <div className="p-3 bg-rose-50 border border-rose-200 rounded-xl text-rose-800 text-xs flex items-start gap-2">
+                  <AlertCircle size={15} className="text-rose-600 shrink-0 mt-0.5" />
+                  <span className="font-medium leading-relaxed">{editFormError}</span>
+                </div>
+              )}
+
+              <div>
+                <label className="text-xs font-bold text-slate-700 block mb-1">
+                  Account Name *
+                </label>
+                <input
+                  type="text"
+                  required
+                  autoFocus
+                  value={editName}
+                  onChange={(e) => {
+                    setEditName(e.target.value);
+                    if (editFormError) setEditFormError(null);
+                  }}
+                  className="w-full px-3.5 py-2.5 border border-slate-200 rounded-xl text-xs text-slate-900 font-semibold focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all"
+                />
+              </div>
+
+              <div>
+                <label className="text-xs font-bold text-slate-700 block mb-1">
+                  Accounting Classification *
+                </label>
+                <select
+                  value={editType}
+                  onChange={(e) => setEditType(e.target.value as AccountType)}
+                  className="w-full px-3.5 py-2.5 border border-slate-200 rounded-xl text-xs text-slate-900 font-semibold focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all cursor-pointer bg-white"
+                >
+                  <option value="Expense">Expense</option>
+                  <option value="Income">Income</option>
+                  <option value="Asset">Asset</option>
+                  <option value="Liability">Liability</option>
+                  <option value="Equity">Equity</option>
+                </select>
+              </div>
+
+              <div className="pt-2 flex items-center justify-end gap-2 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setEditingAccount(null)}
+                  className="px-4 py-2 text-xs font-semibold text-slate-600 hover:text-slate-900 rounded-xl hover:bg-slate-100 transition-colors cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={!editName.trim()}
+                  className="px-5 py-2 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white rounded-xl text-xs font-bold transition-all shadow-3xs cursor-pointer disabled:opacity-50"
+                >
+                  Save Changes
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* 6. MODAL: DELETE ACCOUNT CONFIRMATION */}
+      {deletingAccount && (
+        <div className="fixed inset-0 z-50 bg-slate-900/40 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in duration-150">
+          <div className="bg-white border border-slate-200 rounded-3xl max-w-sm w-full shadow-2xl overflow-hidden animate-in zoom-in-95 duration-150 text-left">
+            
+            <div className="p-5 border-b border-rose-100 bg-rose-50/70 flex items-center justify-between">
+              <div className="flex items-center gap-2.5">
+                <div className="w-10 h-10 rounded-xl bg-rose-100 text-rose-700 flex items-center justify-center shadow-3xs">
+                  <Trash2 size={18} />
+                </div>
+                <div>
+                  <h3 className="font-bold text-slate-900 text-base">Delete Account?</h3>
+                  <p className="text-xs text-rose-700/80">Permanent ledger modification</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setDeletingAccount(null)}
+                className="w-8 h-8 rounded-full bg-white hover:bg-slate-100 text-slate-400 hover:text-slate-700 flex items-center justify-center cursor-pointer transition-colors shadow-3xs"
+              >
+                <X size={15} />
+              </button>
+            </div>
+
+            <div className="p-5 space-y-3 text-xs leading-relaxed text-slate-600">
+              <p>
+                Are you sure you want to delete the account label <strong>"{deletingAccount.name}"</strong> (#{deletingAccount.id})?
+              </p>
+              <div className="p-3 bg-amber-50 border border-amber-200/80 rounded-xl text-amber-900 text-[11px] leading-relaxed">
+                ⚠️ <strong>Ledger Integrity Warning:</strong> If any journal transactions are actively posted to this account, deleting it will break double-entry balance sheets! Reassign or remove those transactions first.
+              </div>
+            </div>
+
+            <div className="p-4 bg-slate-50 border-t border-slate-100 flex items-center justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setDeletingAccount(null)}
+                className="px-3.5 py-1.5 text-xs font-semibold text-slate-600 hover:text-slate-800 rounded-xl hover:bg-slate-100 transition-colors cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  onDeleteAccount(deletingAccount.id);
+                  setDeletingAccount(null);
+                }}
+                className="px-4 py-1.5 bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold rounded-xl transition-all shadow-3xs cursor-pointer"
+              >
+                Confirm Delete
+              </button>
             </div>
           </div>
-        );
-      })()}
+        </div>
+      )}
+
     </div>
   );
 }

@@ -1489,14 +1489,7 @@ export function StudentDuesView({
 
         {/* Global Toolbar and Folder Buttons - Only visible to editors */}
         <div className="grid grid-cols-2 gap-2 w-full md:flex md:flex-wrap md:items-center md:gap-2 md:w-auto">
-          <select
-            value={academicYear}
-            onChange={(e) => setAcademicYear(e.target.value)}
-            className="p-2 border border-gray-200 rounded-xl text-xs font-bold text-slate-700 bg-white"
-          >
-            <option value="2025-2026">2025-2026</option>
-            <option value="2026-2027">2026-2027</option>
-          </select>
+
           {isEditor && activeView !== 'folders' && (
             <button
               onClick={() => {
