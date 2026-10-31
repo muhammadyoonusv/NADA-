@@ -185,6 +185,7 @@ export function StudentDuesView({
   const [payPostJournal, setPayPostJournal] = useState(true);
   const [payDebitAcc, setPayDebitAcc] = useState('');
   const [payCreditAcc, setPayCreditAcc] = useState('');
+  const [payStudentTotalDue, setPayStudentTotalDue] = useState('0');
 
   // Compound payment states
   const [payIsCompound, setPayIsCompound] = useState(false);
@@ -257,7 +258,37 @@ export function StudentDuesView({
       const numB = getStudentRollNumber(b);
       return numA - numB;
     });
-  }, [students]);
+  }, [students, academicYear]);
+
+  // Map every student's ID to their 1-based alphabetical roll number (1..N)
+  const alphabeticalRollMap = useMemo(() => {
+    const map: Record<string, number> = {};
+    classStudentsList.forEach((stu, index) => {
+      map[stu.id] = index + 1;
+    });
+    return map;
+  }, [classStudentsList]);
+
+  const getAlphaRollNumber = (idOrStudent: string | { id: string } | undefined | null, fallbackIdx?: number): number => {
+    if (!idOrStudent) return fallbackIdx !== undefined ? fallbackIdx + 1 : 0;
+    const rawId = typeof idOrStudent === 'string' ? idOrStudent : idOrStudent.id;
+    if (alphabeticalRollMap[rawId]) return alphabeticalRollMap[rawId];
+    const parsed = getStudentRollNumber(idOrStudent);
+    if (parsed > 0) return parsed;
+    return fallbackIdx !== undefined ? fallbackIdx + 1 : 0;
+  };
+
+  const getAlphaRollDisplay = (idOrStudent: string | { id: string } | undefined | null, fallbackIdx?: number): string => {
+    const num = getAlphaRollNumber(idOrStudent, fallbackIdx);
+    return num > 0 ? `${num}` : '';
+  };
+
+  const getAlphaRollCode = (idOrStudent: string | { id: string } | undefined | null, fallbackIdx?: number): string => {
+    const num = getAlphaRollNumber(idOrStudent, fallbackIdx);
+    if (num > 0) return `ROLL-${num}`;
+    if (typeof idOrStudent === 'string') return idOrStudent;
+    return idOrStudent?.id || '';
+  };
 
   // Silently clean any legacy Quran data and normalize roll numbers > 100 in Firestore
   useEffect(() => {
@@ -486,77 +517,72 @@ export function StudentDuesView({
 
   // Filter & Sort table items
   const filteredRows = useMemo(() => {
+    const q = searchTerm.trim().toLowerCase();
     if (activeView === 'roster') {
       const list = classStudentsList.filter(s => {
-        const matchSearch = s.name.toLowerCase().includes(searchTerm.toLowerCase()) || s.id.toLowerCase().includes(searchTerm.toLowerCase());
+        const alphaRollStr = getAlphaRollDisplay(s).toLowerCase();
+        const alphaCodeStr = getAlphaRollCode(s).toLowerCase();
+        const matchSearch =
+          !q ||
+          s.name.toLowerCase().includes(q) ||
+          s.id.toLowerCase().includes(q) ||
+          alphaRollStr === q ||
+          alphaCodeStr.includes(q);
         const matchStatus = statusFilter === 'All' || s.status === statusFilter;
         return matchSearch && matchStatus;
       });
 
       return list.sort((a, b) => {
-        let valA: any = a.name;
-        let valB: any = b.name;
-
         if (sortBy === 'id') {
-          const numA = getStudentRollNumber(a);
-          const numB = getStudentRollNumber(b);
-          if (numA > 0 && numB > 0 && numA !== numB) {
+          const numA = getAlphaRollNumber(a);
+          const numB = getAlphaRollNumber(b);
+          if (numA !== numB) {
             return sortOrder === 'asc' ? numA - numB : numB - numA;
           }
-          valA = a.id;
-          valB = b.id;
         }
 
-        if (typeof valA === 'string' && typeof valB === 'string') {
-          return sortOrder === 'asc'
-            ? valA.trim().localeCompare(valB.trim(), undefined, { sensitivity: 'base' })
-            : valB.trim().localeCompare(valA.trim(), undefined, { sensitivity: 'base' });
-        } else {
-          return sortOrder === 'asc' ? (valA || 0) - (valB || 0) : (valB || 0) - (valA || 0);
-        }
+        const cmp = a.name.trim().localeCompare(b.name.trim(), undefined, { sensitivity: 'base' });
+        return sortOrder === 'asc' ? cmp : -cmp;
       });
     }
 
     if (!activeProgram) return [];
     return currentProgramRows
       .filter(row => {
+        const alphaRollStr = getAlphaRollDisplay(row.student).toLowerCase();
+        const alphaCodeStr = getAlphaRollCode(row.student).toLowerCase();
         const matchSearch = 
-          row.student.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
-          row.student.id.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          (row.dues.remarks || '').toLowerCase().includes(searchTerm.toLowerCase());
+          !q ||
+          row.student.name.toLowerCase().includes(q) || 
+          row.student.id.toLowerCase().includes(q) ||
+          alphaRollStr === q ||
+          alphaCodeStr.includes(q) ||
+          (row.dues.remarks || '').toLowerCase().includes(q);
 
         const matchStatus = statusFilter === 'All' || row.dues.status === statusFilter;
         return matchSearch && matchStatus;
       })
       .sort((a, b) => {
-        let valA: any = a.student.name;
-        let valB: any = b.student.name;
-
         if (sortBy === 'id') {
-          const numA = getStudentRollNumber(a.student);
-          const numB = getStudentRollNumber(b.student);
-          if (numA > 0 && numB > 0 && numA !== numB) {
+          const numA = getAlphaRollNumber(a.student);
+          const numB = getAlphaRollNumber(b.student);
+          if (numA !== numB) {
             return sortOrder === 'asc' ? numA - numB : numB - numA;
           }
-          valA = a.student.id;
-          valB = b.student.id;
         } else if (sortBy === 'paid') {
-          valA = a.dues.amountPaid;
-          valB = b.dues.amountPaid;
+          const diff = (a.dues.amountPaid || 0) - (b.dues.amountPaid || 0);
+          if (diff !== 0) return sortOrder === 'asc' ? diff : -diff;
         } else if (sortBy === 'remaining') {
-          valA = Math.max(0, a.dues.totalDue - a.dues.amountPaid);
-          valB = Math.max(0, b.dues.totalDue - b.dues.amountPaid);
+          const remA = Math.max(0, a.dues.totalDue - a.dues.amountPaid);
+          const remB = Math.max(0, b.dues.totalDue - b.dues.amountPaid);
+          const diff = remA - remB;
+          if (diff !== 0) return sortOrder === 'asc' ? diff : -diff;
         }
 
-        if (typeof valA === 'string' && typeof valB === 'string') {
-          return sortOrder === 'asc'
-            ? valA.trim().localeCompare(valB.trim(), undefined, { sensitivity: 'base' })
-            : valB.trim().localeCompare(valA.trim(), undefined, { sensitivity: 'base' });
-        } else {
-          return sortOrder === 'asc' ? (valA || 0) - (valB || 0) : (valB || 0) - (valA || 0);
-        }
+        const cmp = a.student.name.trim().localeCompare(b.student.name.trim(), undefined, { sensitivity: 'base' });
+        return sortOrder === 'asc' ? cmp : -cmp;
       });
-  }, [activeView, activeProgram, classStudentsList, currentProgramRows, searchTerm, statusFilter, sortBy, sortOrder]);
+  }, [activeView, activeProgram, classStudentsList, currentProgramRows, searchTerm, statusFilter, sortBy, sortOrder, alphabeticalRollMap]);
 
   const requestSort = (field: 'name' | 'id' | 'paid' | 'remaining') => {
     if (sortBy === field) {
@@ -573,6 +599,7 @@ export function StudentDuesView({
     setPayingStudentId(stuId);
     const balance = Math.max(0, duesItem.totalDue - duesItem.amountPaid);
     setPayAmount(balance.toString());
+    setPayStudentTotalDue(duesItem.totalDue.toString());
     
     const bankOrCash = assetAccounts.find(a => a.name.toLowerCase().includes('bank')) || assetAccounts[0];
     const feesAcc = incomeAccounts.find(a => a.name.toLowerCase().includes('fee') || a.name.toLowerCase().includes('dues') || a.name.toLowerCase().includes('receipt')) || incomeAccounts[0];
@@ -582,7 +609,7 @@ export function StudentDuesView({
     
     // Find name
     const sName = classStudentsList.find(s => s.id === stuId)?.name || 'Student';
-    const rollStr = formatStudentRoll(stuId);
+    const rollStr = getAlphaRollCode(stuId);
     setPayRemarks(`${activeProgram.name} drive payment from ${sName} (${rollStr})`);
   };
 
@@ -1060,6 +1087,7 @@ export function StudentDuesView({
       ...activeProgram.studentDues,
       [payingStudentId]: {
         ...currentDues,
+        totalDue: parseFloat(payStudentTotalDue) || activeProgram.defaultAmount,
         amountPaid: newPaid,
         status: newStatus,
         lastPaymentDate: new Date().toISOString().split('T')[0],
@@ -1173,7 +1201,7 @@ export function StudentDuesView({
     if (bulkPostJournal && entriesToPost.length > 0) {
       const totalBulkAmount = entriesToPost.reduce((sum, item) => sum + item.amount, 0);
       const studentDetails = entriesToPost.map(item => {
-        const cleanId = formatStudentRoll(item.studentId);
+        const cleanId = getAlphaRollCode(item.studentId);
         return `${item.studentName} (${cleanId}): ₹${item.amount}`;
       }).join(', ');
       const rawNarration = `Bulk Drive Collection for ${activeProgram.name} (${entriesToPost.length} students): ${studentDetails}`;
@@ -1312,12 +1340,18 @@ export function StudentDuesView({
         return;
       }
 
-      // Try finding the student using exact ID first, then fuzzy name
-      const foundStu = folderStudents.find(s => 
-        s.id.toLowerCase() === cleanNameOrId || 
-        s.name.toLowerCase() === cleanNameOrId ||
-        s.name.toLowerCase().includes(cleanNameOrId)
-      );
+      // Try finding the student using alphabetical roll number, exact ID, or name
+      const foundStu = folderStudents.find(s => {
+        const alphaRoll = getAlphaRollDisplay(s).toLowerCase();
+        const alphaCode = getAlphaRollCode(s).toLowerCase();
+        return (
+          alphaRoll === cleanNameOrId ||
+          alphaCode === cleanNameOrId ||
+          s.id.toLowerCase() === cleanNameOrId || 
+          s.name.toLowerCase() === cleanNameOrId ||
+          s.name.toLowerCase().includes(cleanNameOrId)
+        );
+      });
 
       if (foundStu) {
         updatedGrid[foundStu.id] = {
@@ -1442,7 +1476,7 @@ export function StudentDuesView({
   // Open edit master student
   const handleOpenEditMaster = (stu: Student) => {
     setEditingStudent(stu);
-    setStudentId(formatStudentRoll(stu.id));
+    setStudentId(getAlphaRollCode(stu.id));
     setStudentName(stu.name);
     setStudentClass(stu.className && !/quran/i.test(stu.className) ? stu.className : 'Class Member');
     setStudentRemarks(stu.remarks && /quran/i.test(stu.remarks) ? stu.remarks.replace(/quran\s*(department)?\s*(active\s*roster)?/gi, 'Class Member').trim() : (stu.remarks || ''));
@@ -1817,7 +1851,7 @@ export function StudentDuesView({
                 ) : (
                   filteredRows.map((stu, idx) => (
                     <tr key={stu.id} className="hover:bg-slate-50/50 leading-relaxed font-medium text-slate-600">
-                      <td className="p-4 font-bold font-mono text-slate-900">{formatStudentRollDisplay(stu, idx)}</td>
+                      <td className="p-4 font-bold font-mono tabular-nums text-slate-900">{getAlphaRollDisplay(stu, idx)}</td>
                       <td className="p-4 text-slate-900 font-semibold">{stu.name}</td>
                       <td className="p-4 text-slate-400 text-[11px]">{stu.remarks || <span className="italic text-gray-200">No remarks</span>}</td>
                       {isEditor && (
@@ -1861,7 +1895,7 @@ export function StudentDuesView({
                 <div key={stu.id} className="bg-white border border-gray-200 p-4 rounded-xl space-y-3 shadow-3xs">
                   <div className="flex justify-between items-start gap-2">
                     <div>
-                      <span className="text-[10px] font-bold font-mono text-slate-400 block uppercase">Roll #{formatStudentRollDisplay(stu, idx)}</span>
+                      <span className="text-[10px] font-bold font-mono tabular-nums text-slate-400 block uppercase">Roll #{getAlphaRollDisplay(stu, idx)}</span>
                       <span className="font-bold text-slate-900 text-sm">{stu.name}</span>
                     </div>
                   </div>
@@ -2195,8 +2229,8 @@ export function StudentDuesView({
                           )}
 
                           {/* Roll No */}
-                          <td className="p-4 font-bold font-mono text-slate-900 uppercase">
-                            {formatStudentRollDisplay(row.student, idx)}
+                          <td className="p-4 font-bold font-mono tabular-nums text-slate-900 uppercase">
+                            {getAlphaRollDisplay(row.student, idx)}
                           </td>
 
                           {/* Name */}
@@ -2348,7 +2382,7 @@ export function StudentDuesView({
                           </button>
                         )}
                         <div>
-                          <span className="text-[10px] font-bold font-mono text-slate-400 block uppercase">Roll #{formatStudentRollDisplay(row.student, idx)}</span>
+                          <span className="text-[10px] font-bold font-mono tabular-nums text-slate-400 block uppercase">Roll #{getAlphaRollDisplay(row.student, idx)}</span>
                           <span className="font-bold text-slate-900 text-sm leading-snug block">{row.student.name}</span>
                         </div>
                       </div>
@@ -2645,18 +2679,8 @@ export function StudentDuesView({
             >
               
               {/* Header */}
-              <div className="p-5 border-b border-gray-150 bg-slate-50 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shrink-0">
-                <div className="space-y-1">
-                  <div className="flex items-center gap-2">
-                    <FileSpreadsheet className="text-emerald-600" size={20} />
-                    <h3 className="text-sm font-bold text-slate-800">
-                      ⚡ Quick Spreadsheet Matrix Bulk Entry: <span className="text-emerald-705 font-extrabold">{activeProgram.name}</span>
-                    </h3>
-                  </div>
-                  <p className="text-[11px] text-slate-500">
-                    Directly type given collections and dues targets for the <span className="font-extrabold text-emerald-800">{folderStudents.length} NADA students</span>. Tab or click into boxes, change numbers, and hit apply to write updates instantly to Firestore.
-                  </p>
-                </div>
+              <div className="px-5 py-3 border-b border-gray-150 bg-slate-50 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shrink-0">
+                <div />
                 <div className="flex items-center gap-2">
                   <button
                     onClick={() => setBulkMode('grid')}
@@ -2685,43 +2709,23 @@ export function StudentDuesView({
                 <div className="bg-emerald-50/50 border-b border-emerald-101 px-6 py-3 flex flex-wrap justify-between items-center gap-3 shrink-0 text-left">
                   <div className="flex items-center gap-1 text-[11px] font-bold text-emerald-900">
                     <Info size={12} className="text-emerald-600" />
-                    <span>Speed Actions Toolbar:</span>
                   </div>
-                  <div className="flex flex-wrap items-center gap-2">
+                  <div className="flex items-center justify-between w-full gap-3">
                     <button
                       type="button"
                       onClick={() => applyPresetToGrid('all-paid')}
-                      className="px-2.5 py-1 text-[10px] bg-emerald-600 text-white rounded-md font-bold cursor-pointer hover:bg-emerald-700"
+                      className="px-3.5 py-1.5 text-xs bg-emerald-600 text-white rounded-xl font-bold cursor-pointer hover:bg-emerald-700 shadow-3xs transition-all"
                     >
-                      Clear Dues (Set All Given = Target Dues)
+                      Clear Dues
                     </button>
                     <button
                       type="button"
                       onClick={() => applyPresetToGrid('all-due-zero')}
-                      className="px-2.5 py-1 text-[10px] bg-slate-200 hover:bg-slate-250 text-slate-700 rounded-md font-bold cursor-pointer"
+                      className="px-3.5 py-1.5 text-xs bg-white border border-gray-200 text-slate-700 rounded-xl font-bold cursor-pointer hover:bg-gray-50 shadow-3xs transition-all"
                     >
-                      Reset Given Amounts (Set All Given = 0)
+                      Reset
                     </button>
-                    <div className="flex items-center gap-1.5 border border-emerald-100 bg-white px-2 py-0.5 rounded-lg shadow-3xs">
-                      <span className="text-[10px] font-bold text-slate-500">Set All Targets:</span>
-                      <input
-                        type="number"
-                        min="0"
-                        value={bulkTargetAmount}
-                        onChange={(e) => setBulkTargetAmount(e.target.value)}
-                        className="w-16 px-1.5 py-0.5 border border-slate-200 rounded text-[10px] font-bold text-slate-800 text-center focus:outline-none focus:ring-1 focus:ring-emerald-400"
-                        placeholder={activeProgram.defaultAmount.toString()}
-                      />
-                      <button
-                        type="button"
-                        onClick={() => applyPresetToGrid('all-due-custom', bulkTargetAmount)}
-                        className="px-2 py-1 text-[10px] bg-emerald-600 hover:bg-emerald-700 text-white rounded-md font-bold cursor-pointer transition-colors"
-                        title="Bulk set all student target amounts"
-                      >
-                        Apply
-                      </button>
-                    </div>
-                  </div>
+                   </div>
                 </div>
               )}
 
@@ -2754,7 +2758,7 @@ export function StudentDuesView({
                             
                             return (
                               <tr key={stu.id} className="hover:bg-slate-50/50 leading-none">
-                                <td className="p-2 font-mono font-bold text-slate-900 text-left">{formatStudentRollDisplay(stu, idx)}</td>
+                                <td className="p-2 font-mono tabular-nums font-bold text-slate-900 text-left">{getAlphaRollDisplay(stu, idx)}</td>
                                 <td className="p-2 text-slate-900 font-bold truncate text-left">{stu.name}</td>
                                 
                                 {/* Given paid input */}
@@ -2819,7 +2823,7 @@ export function StudentDuesView({
                         return (
                           <div key={stu.id} className="bg-white border border-gray-200 p-4 rounded-xl space-y-3.5 shadow-3xs text-left">
                             <div className="flex justify-between items-center border-b border-gray-100 pb-2">
-                              <span className="text-[10px] font-mono font-bold text-slate-400 uppercase">Roll #{formatStudentRollDisplay(stu, idx)}</span>
+                              <span className="text-[10px] font-mono tabular-nums font-bold text-slate-400 uppercase">Roll #{getAlphaRollDisplay(stu, idx)}</span>
                               <span className="font-extrabold text-slate-900 text-xs truncate max-w-[200px]">{stu.name}</span>
                             </div>
                             <div className="grid grid-cols-2 gap-3">
@@ -3226,16 +3230,20 @@ export function StudentDuesView({
 
               <form onSubmit={handleRecordProgramPay} className="p-6 space-y-4 text-left">
                 
-                {/* Existing Dues Indicator */}
-                <div className="grid grid-cols-2 gap-4 bg-slate-50 border border-slate-150 p-3.5 rounded-xl text-[11px] font-mono text-slate-505 font-bold">
-                  <div>
-                    <span className="block text-gray-400 font-sans font-bold text-[9px] uppercase tracking-wider">Scheduled Target Dues</span>
-                    <span className="text-xs text-slate-850 font-mono">₹{activeProgram.studentDues[payingStudentId]?.totalDue || activeProgram.defaultAmount}</span>
-                  </div>
-                  <div>
-                    <span className="block text-gray-400 font-sans font-bold text-[9px] uppercase tracking-wider">Paid So Far</span>
-                    <span className="text-xs text-slate-950 font-mono">₹{activeProgram.studentDues[payingStudentId]?.amountPaid || 0}</span>
-                  </div>
+                {/* Individual Student Target Due Customization */}
+                <div>
+                  <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-widest font-mono mb-1">Individual Student Target Due (₹) *</label>
+                  <input
+                    type="number"
+                    required
+                    min={0}
+                    value={payStudentTotalDue}
+                    onChange={(e) => setPayStudentTotalDue(e.target.value)}
+                    className="w-full p-2.5 bg-gray-50 font-mono font-bold text-slate-900 border border-gray-205 focus:bg-white focus:ring-1 focus:ring-indigo-400 focus:border-indigo-400 text-sm outline-none rounded-xl"
+                  />
+                  <p className="text-[10px] text-slate-400 font-mono mt-0.5">
+                    Paid so far: <span className="font-bold text-slate-700">₹{activeProgram.studentDues[payingStudentId]?.amountPaid || 0}</span>
+                  </p>
                 </div>
 
                 {/* Amount Paid */}
@@ -3271,24 +3279,6 @@ export function StudentDuesView({
 
                 {/* Automatically Post Double Entry */}
                 <div className="bg-indigo-50/50 border border-indigo-100 p-4 rounded-xl space-y-3.5 font-sans">
-                  <label className="flex items-start gap-2.5 cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={payPostJournal}
-                      onChange={(e) => setPayPostJournal(e.target.checked)}
-                      className="mt-0.5"
-                    />
-                    <div>
-                      <span className="text-xs font-bold text-indigo-950 flex items-center gap-1">
-                        Post as Balanced Journal Entry
-                        <ShieldCheck size={13} className="text-indigo-600" />
-                      </span>
-                      <span className="block text-[10px] text-slate-450 leading-relaxed mt-0.5">
-                        Post balanced general ledger receipt synchronously in central union ledger books.
-                      </span>
-                    </div>
-                  </label>
-
                   {payPostJournal && (
                     <motion.div
                       initial={{ opacity: 0, height: 0 }}
